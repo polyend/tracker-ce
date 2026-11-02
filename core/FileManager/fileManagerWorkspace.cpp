@@ -4,6 +4,7 @@
 #include "mtSequencer.h"
 
 #include "fileManager.h"
+#include "performanceMode/perfScenes.h"
 
 #include <cstring>
 
@@ -22,6 +23,8 @@ bool cFileManager::createNewProjectInWorkspace()
     getDefaultProject(&mtProject);
     mtProject.values.projectNotSavedFlag = 2; // nie zapiany do folderu Projects
     mtProject.values.actualPattern = 1;
+
+    perfScenes.clearBank();
 
     // saveActualPattern(cWorkspacePatternsPath, mtProject.values.actualPattern);
     sequencer.clearAllPatternSlots(); // czyszczenie sekwencji przed pierwszym zapisem
