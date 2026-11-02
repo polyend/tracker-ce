@@ -603,6 +603,96 @@ void cPerformEngine::pasteSlotFx(uint8_t slot)
         sourceDataSaveFunct();
 }
 
+void cPerformEngine::captureScene(strPerfScene& scene)
+{
+    for (uint8_t slot = 0; slot < 12; slot++)
+    {
+        scene.fxPlaces[slot] = slotToFx[slot];
+        scene.selectedValues[slot] = slotToRow[slot];
+        scene.fxValues[slot][0] = *(slotRowToValue + (4 * slot) + 0);
+        scene.fxValues[slot][1] = *(slotRowToValue + (4 * slot) + 1);
+        scene.fxValues[slot][2] = *(slotRowToValue + (4 * slot) + 2);
+        scene.fxValues[slot][3] = *(slotRowToValue + (4 * slot) + 3);
+        scene.liveValues[slot] = slotsTempValues[slot];
+    }
+}
+
+void cPerformEngine::recallScene(const strPerfScene& scene)
+{
+    // Clear currently sounding FX while keeping armed tracks.
+    for (uint8_t fx = 0; fx < fxCount; fx++)
+    {
+        if (fxList[fx]->setup->isGlobalFx)
+        {
+            resetGlobalFxValue(fx);
+        }
+        else
+        {
+            for (uint8_t track = 0; track < kPerformanceTracks; track++)
+            {
+                if (tracksPerformanceState[track])
+                {
+                    resetFxOnTrack(fx, track);
+                }
+            }
+        }
+    }
+
+    for (uint8_t slot = 0; slot < 12; slot++)
+    {
+        uint8_t fx = scene.fxPlaces[slot];
+        if (fx >= fxCount)
+        {
+            fx = 0;
+        }
+
+        slotToFx[slot] = fx;
+
+        uint8_t row = scene.selectedValues[slot];
+        if (row >= 4)
+        {
+            row = 0;
+        }
+        slotToRow[slot] = (fx == 0) ? 0 : row;
+
+        *(slotRowToValue + (4 * slot) + 0) = scene.fxValues[slot][0];
+        *(slotRowToValue + (4 * slot) + 1) = scene.fxValues[slot][1];
+        *(slotRowToValue + (4 * slot) + 2) = scene.fxValues[slot][2];
+        *(slotRowToValue + (4 * slot) + 3) = scene.fxValues[slot][3];
+        slotsTempValues[slot] = scene.liveValues[slot];
+        slotChangeFlag[slot] = 1;
+    }
+
+    for (uint8_t slot = 0; slot < 12; slot++)
+    {
+        uint8_t fxIdx = slotToFx[slot];
+        if (fxIdx == 0 || slotsTempValues[slot] == 0)
+        {
+            continue;
+        }
+
+        if (fxList[fxIdx]->setup->isGlobalFx)
+        {
+            loadGlobalFxValue(fxIdx, slotsTempValues[slot]);
+        }
+        else
+        {
+            for (uint8_t track = 0; track < kPerformanceTracks; track++)
+            {
+                if (tracksPerformanceState[track])
+                {
+                    loadFxValuesOnTrack(slot, track);
+                }
+            }
+        }
+    }
+
+    if (sourceDataSaveFunct != nullptr)
+    {
+        sourceDataSaveFunct();
+    }
+}
+
 // CC mode
 void cPerformEngine::setCCValue(uint8_t value, uint8_t slot)
 {

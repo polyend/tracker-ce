@@ -10,6 +10,7 @@
 
 #include "fileManager.h"
 #include "fileTransfer.h"
+#include "performanceMode/perfScenes.h"
 
 #include "projectEditor/projectEditor.h"
 
@@ -51,6 +52,7 @@ void cFileManager::init(FileSystem* fileSystem, Synth* synth, bool stereoSampleM
 
     fileTransfer.init(fileSystem);
     patternsMetadata.init(fileSystem);
+    perfScenes.init(fileSystem);
     FileManagerOperation::init(fileSystem);
 
     this->stereoSampleMode = stereoSampleMode;

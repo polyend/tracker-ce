@@ -110,6 +110,11 @@ class cPerformanceMode : public ModuleBase
     void showTracksPatterns();
     void showFxNames(uint8_t place);
     void hideFxNames();
+
+    void toggleScenesPage();
+    void showScenesPage();
+    void hideScenesPage();
+    bool isScenesPageActive() const { return scenesPageActive; }
     //----------------------------------
 
     void setFxValue(int value);
@@ -146,6 +151,7 @@ class cPerformanceMode : public ModuleBase
     uint8_t performanceEditState = 0;
     uint8_t performanceEditPlace = 0;
     uint8_t tracksPage = 0;
+    uint8_t scenesPageActive = 0;
 
     uint8_t dontClearPerformanceMode = 0;
 

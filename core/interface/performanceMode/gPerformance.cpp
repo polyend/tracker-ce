@@ -1,6 +1,9 @@
 #include "mtSequencer.h"
+#include "perfScenes.h"
 #include "performanceEngine.h"
 #include "performanceMode.h"
+
+#include <cstdio>
 
 static char* getPerfTrackName(uint8_t track)
 {
@@ -356,8 +359,61 @@ void cPerformanceMode::colorTracksLabel(uint8_t button, uint8_t state)
 //##############################################################################################
 //###############################        MUTE BUTTONS          #################################
 //##############################################################################################
+void cPerformanceMode::showScenesPage()
+{
+    static const char* const sceneSlotLabels[kPerfScenesCount] = {
+        "1", "2", "3", "4", "5", "6", "7", "8"
+    };
+
+    titleBar->show();
+    titleBar->setTitle("Scenes");
+
+    for (uint8_t i = 0; i < kPerfScenesCount; i++)
+    {
+        const uint32_t* colors = perfScenes.isFilled(i)
+                                   ? display.getTheme().performActiveTrackLabelsColors
+                                   : display.getTheme().inactiveLabelsColors;
+
+        display.setControlColors(label[i], colors);
+        display.setControlText(label[i], sceneSlotLabels[i]);
+        display.setControlText2(label[i], (char*)"");
+        display.setControlStyle(label[i],
+                                controlStyleCenterX | controlStyleCenterY | controlStyleFont3);
+        display.setControlShow(label[i]);
+        display.refreshControl(label[i]);
+    }
+
+    display.synchronizeRefresh();
+}
+
+void cPerformanceMode::hideScenesPage()
+{
+    scenesPageActive = 0;
+    titleBar->setTitle("Performance FX");
+    showTracksPatterns();
+    showTracksState(buttons->isButtonPressed(interfaceButtonShift));
+}
+
+void cPerformanceMode::toggleScenesPage()
+{
+    if (scenesPageActive)
+    {
+        hideScenesPage();
+    }
+    else
+    {
+        scenesPageActive = 1;
+        showScenesPage();
+    }
+}
+
 void cPerformanceMode::showMuteButtons(uint8_t state)
 {
+    if (scenesPageActive)
+    {
+        return;
+    }
+
     if (state)
     {
         for (uint8_t i = 0; i < 8; i++)

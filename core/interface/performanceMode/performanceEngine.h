@@ -3,6 +3,7 @@
 #define INTERFACE_PERFORMANCEMODE_PERFORMANCEENGINE_H_
 
 #include "mtStructs.h"
+#include "perfScenes.h"
 #include <stdint.h>
 
 struct strPerformDataSource
@@ -49,6 +50,9 @@ class cPerformEngine
     void swapSlotFx(uint8_t slotFrom, uint8_t slotTo);
     void copySlotFx(uint8_t slot);
     void pasteSlotFx(uint8_t slot);
+
+    void captureScene(strPerfScene& scene);
+    void recallScene(const strPerfScene& scene);
 
     void loadSelectedValuesToTempValues();
 
