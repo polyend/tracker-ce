@@ -40,7 +40,7 @@ const uint8_t PRODUCT_BETA = FW_VER_BETA;
 const char firmwareVersionLabelFormat[] = "%d.%d.%d " FW_EDITION_NAME;
 const char firmwareVersionLabelFormatBeta[] = "%d.%d.%d " FW_EDITION_NAME " beta %d";
 
-const uint8_t PROJECT_FILE_VERSION = 17;   // wersja struktury pliku projektu
+const uint8_t PROJECT_FILE_VERSION = 18;   // wersja struktury pliku projektu
 const uint8_t INSTRUMENT_FILE_VERSION = 9; // wersja struktury pliku instrumentu
 const uint8_t PATTERN_FILE_VERSION = 6;
 
@@ -979,6 +979,8 @@ struct strMtProjectRemote
     strMtValues values;
     char projectName[PROJECT_NAME_SIZE]; // used for identify source project name in workspace
     char projectPath[PATCH_SIZE - PROJECT_NAME_SIZE]; // and location of that project
+    // Use existing trailing padding so adding this setting does not shift project names.
+    uint8_t defaultSequenceLength = 32;
 };
 
 //----------------------------------------------------------------------------------
@@ -990,6 +992,7 @@ struct strMtProject
 
     strSong song;
     strMtValues values;
+    uint8_t defaultSequenceLength = 32;
 
     // dynamiczne
     strSampleMemory sampleMemory[kSampleInstrumentsCount];

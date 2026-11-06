@@ -42,6 +42,7 @@ struct strItemTypeListValues
     uint8_t max;
     uint8_t interval; // narazie nie uzywane
     uint8_t dev;
+    void (*funct1)(void) = nullptr;
 };
 
 struct strItemTypeListText
@@ -245,6 +246,10 @@ const char* const kUsbAudioList[4] = {
 
 const char pattDivDesc[] = {
     "Highlights each chosen step, to give you better visual feedback in the pattern. "
+};
+
+const char defaultSequenceLengthDesc[] = {
+    "Sets the number of steps in new sequences. Existing sequences are unchanged."
 };
 
 const char radioRegDesc[] = { "Adjusts radio frequencies to the chosen region." };

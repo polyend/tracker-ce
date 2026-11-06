@@ -328,6 +328,12 @@ static void functPlayAction()
 
 uint8_t cProjectEditor::loadProjectValues()
 {
+    if (mtProject.defaultSequenceLength == 0 ||
+        mtProject.defaultSequenceLength > Sequencer::MAXSTEP + 1)
+    {
+        mtProject.defaultSequenceLength = Sequencer::DEFAULT_PATTERN_LENGTH;
+        newFileManager.setProjectStructChanged();
+    }
 
     if (mtProject.values.isSnapToZeroEnabled > 1)
     {

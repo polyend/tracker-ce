@@ -116,22 +116,7 @@ version:
 TARGET ?= all
 
 bump-patch:
-	@python3 -c 'import re, sys; t="$(TARGET)".upper(); p="version.mk"; s=open(p).read(); \
-	targets = ["ORIGINAL", "PLUS", "MINI"] if t == "ALL" else [t]; \
-	for k in targets: \
-	    m = re.search(rf"{k}_VER_PATCH\s*:=\s*(\d+)", s); \
-	    assert m, f"Unknown TARGET {t}"; \
-	    v = int(m.group(1)) + 1; \
-	    s = re.sub(rf"{k}_VER_PATCH\s*:=\s*\d+", f"{k}_VER_PATCH := {v}", s); \
-	open(p, "w").write(s); print(f"Bumped patch version for {targets}")'
+	@python3 -c 'import re; t="$(TARGET)".upper(); assert t in ("ALL", "ORIGINAL", "PLUS", "MINI"), f"Unknown TARGET {t}"; p="version.mk"; s=open(p).read(); s=re.sub(r"((?:ORIGINAL|PLUS|MINI)_VER_PATCH\s*:=\s*)(\d+)", lambda m: m.group(1)+str(int(m.group(2))+1) if t=="ALL" or m.group(1).split("_")[0]==t else m.group(0), s); open(p,"w").write(s); print(f"Bumped patch version for {t}")'
 
 bump-minor:
-	@python3 -c 'import re, sys; t="$(TARGET)".upper(); p="version.mk"; s=open(p).read(); \
-	targets = ["ORIGINAL", "PLUS", "MINI"] if t == "ALL" else [t]; \
-	for k in targets: \
-	    m = re.search(rf"{k}_VER_MINOR\s*:=\s*(\d+)", s); \
-	    assert m, f"Unknown TARGET {t}"; \
-	    v = int(m.group(1)) + 1; \
-	    s = re.sub(rf"{k}_VER_MINOR\s*:=\s*\d+", f"{k}_VER_MINOR := {v}", s); \
-	    s = re.sub(rf"{k}_VER_PATCH\s*:=\s*\d+", f"{k}_VER_PATCH := 0", s); \
-	open(p, "w").write(s); print(f"Bumped minor version for {targets} (patch reset to 0)")'
+	@python3 -c 'import re; t="$(TARGET)".upper(); assert t in ("ALL", "ORIGINAL", "PLUS", "MINI"), f"Unknown TARGET {t}"; p="version.mk"; s=open(p).read(); s=re.sub(r"((ORIGINAL|PLUS|MINI)_VER_MINOR\s*:=\s*)(\d+)", lambda m: m.group(1)+str(int(m.group(3))+1) if t=="ALL" or m.group(2)==t else m.group(0), s); s=re.sub(r"((ORIGINAL|PLUS|MINI)_VER_PATCH\s*:=\s*)(\d+)", lambda m: m.group(1)+"0" if t=="ALL" or m.group(2)==t else m.group(0), s); open(p,"w").write(s); print(f"Bumped minor version for {t} (patch reset to 0)")'

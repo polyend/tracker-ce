@@ -18,6 +18,7 @@ void setLimiterMode();
 void setSendsMode();
 void setHeadroomMode();
 void setSnapToZeroMode();
+void setDefaultSequenceLength();
 
 void setMetronomValues();
 void setSlaveClockCompValue();

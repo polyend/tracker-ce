@@ -139,6 +139,8 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
 
     memcpy(&project->song, &pFile->projectDataAndHeader.project.song, sizeof(strSong));
     memcpy(&project->values, &pFile->projectDataAndHeader.project.values, sizeof(strMtValues));
+    project->defaultSequenceLength =
+      pFile->projectDataAndHeader.project.defaultSequenceLength;
     //*proj=pFile.projectDataAndHeader.project;
     // mtProject.values=pFile.projectDataAndHeader.project.values;
     return true;
@@ -152,6 +154,8 @@ bool cFileManager::writeProjectFileToFileStruct(strMtProject* project, strProjec
     strcpy(pFile->projectDataAndHeader.project.projectPath, currentProjectPatch);
     pFile->projectDataAndHeader.project.projectName[PROJECT_NAME_SIZE - 1] = 0;
     pFile->projectDataAndHeader.project.projectPath[PATCH_SIZE - PROJECT_NAME_SIZE - 1] = 0;
+    pFile->projectDataAndHeader.project.defaultSequenceLength =
+      project->defaultSequenceLength;
 
     pFile->projectDataAndHeader.projectHeader.id_file[0] = 'M';
     pFile->projectDataAndHeader.projectHeader.id_file[1] = 'T';
@@ -211,6 +215,7 @@ void cFileManager::getDefaultProject(struct strMtProject* source)
 
     getDefaultSong(&source->song);
     getDefaultValues(&source->values);
+    source->defaultSequenceLength = 32;
 
 #if FILEMANAGER_HANDLE_SYNTH == 1
     for (int part = 0; part < kSynthInstrumentsCount; part++)

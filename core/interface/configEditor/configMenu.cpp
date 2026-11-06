@@ -19,15 +19,15 @@
 
 #ifdef TRACKER_MINI
 constexpr uint8_t baseMenuGroupCount = 8;
-constexpr uint8_t projectMenuGroupCount = 10;
+constexpr uint8_t projectMenuGroupCount = 11;
 constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
-constexpr uint8_t projectMenuGroupCount = 10;
+constexpr uint8_t projectMenuGroupCount = 11;
 constexpr uint8_t generalMenuGroupCount = 12;
 #else
 constexpr uint8_t baseMenuGroupCount = 6;
-constexpr uint8_t projectMenuGroupCount = 10;
+constexpr uint8_t projectMenuGroupCount = 11;
 constexpr uint8_t generalMenuGroupCount = 12;
 #endif
 
@@ -62,6 +62,9 @@ cMenuGroup menuCredits(menuBase, "Info", 4);
 
 // project settings
 const strItemTypeListValues setupPatternDiv{ &mtProject.values.patternDiv, 0, 15, 1, 1 };
+const strItemTypeListValues setupDefaultSequenceLength{
+    &mtProject.defaultSequenceLength, 1, 128, 1, 0, setDefaultSequenceLength
+};
 const strItemTypeListText setupPerfSource{ &mtConfig.general.performanceSource, 2, performanceSourceTexts };
 const strItemTypeListTextWithAction setupPadsScale{ &mtProject.values.padBoardScale, 39, scaleNames, setPadBoardValues };
 const strItemTypeListTextWithAction setupPadsRootNote{ &mtProject.values.padBoardRootNote,  37,  &allNotes[12], setPadBoardValues };
@@ -74,6 +77,11 @@ const strItemTypeListTextWithAction setupSnapToZeroMode{ &mtProject.values.isSna
 
 cMenuItem melPerformanceSource(menuProject, "Performance presets", perfPresDesc, menuTypeItemListText, &setupPerfSource);
 cMenuItem melPatternDiv(menuProject, "Pattern divider", pattDivDesc, menuTypeItemListValues, &setupPatternDiv);
+cMenuItem melDefaultSequenceLength(menuProject,
+                                   "Default sequence length",
+                                   defaultSequenceLengthDesc,
+                                   menuTypeItemListValues,
+                                   &setupDefaultSequenceLength);
 cMenuItem melPadsScale(menuProject, "Notes scale", scaleDesc,  menuTypeItemListTextWithAction, &setupPadsScale);
 cMenuItem melPadsRootNote(menuProject,  "Root note", rootNoteDesc, menuTypeItemListTextWithAction,  &setupPadsRootNote);
 cMenuItem melPadsLayout(menuProject, "Notes layout", padLayDesc, menuTypeItemListTextWithAction, &setupPadsLayout);
@@ -786,7 +794,11 @@ void cConfigEditor::configListConfirm(uint8_t list_pos)
             strItemTypeListValues* temp_str =
               (strItemTypeListValues*)selected_child->getItemSetup();
             if (list_pos <= temp_str->max - temp_str->min)
+            {
                 *(temp_str->value) = temp_str->min + list_pos;
+                if (temp_str->funct1 != nullptr)
+                    temp_str->funct1();
+            }
             break;
         }
         case menuTypeItemListText:

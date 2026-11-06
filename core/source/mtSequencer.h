@@ -730,7 +730,7 @@ class Sequencer
     }
 
     strPattern* getPatternToLoadFromFile() { return bufferPattern; }
-    void clearAllPatternSlots();
+    void clearAllPatternSlots(uint8_t defaultSequenceLength = DEFAULT_PATTERN_LENGTH);
 
     strPattern* getPatternToUI() { return currentPattern; }
 
@@ -804,6 +804,7 @@ class Sequencer
 
     void clearSingleTrack(strPattern::strTrack* track);
     void clearPattern(strPattern* patt);
+    void clearPattern(strPattern* patt, uint8_t sequenceLength);
     void setPatternHeader(strPattern* patt);
     void clearStep(strPattern::strTrack::strStep*);
     void clearStep(strPattern::strTrack::strStep* step, uint8_t);

@@ -1406,6 +1406,17 @@ void Sequencer::clearPattern(strPattern* patt)
     }
 }
 
+void Sequencer::clearPattern(strPattern* patt, uint8_t sequenceLength)
+{
+    clearPattern(patt);
+
+    sequenceLength = clamp<uint8_t>(sequenceLength, 1, MAXSTEP + 1);
+    for (strPattern::strTrack& track : patt->track)
+    {
+        track.length = sequenceLength - 1;
+    }
+}
+
 void Sequencer::clearSingleTrack(strPattern::strTrack* track)
 {
     for (uint8_t i = 0; i <= MAXSTEP; i++)

@@ -399,13 +399,13 @@ void cConfigEditor::showConfigList4Val(uint8_t* value,
                                        uint8_t dev)
 {
     configListShown = 1;
-    selectedConfigListPosition = *value;
+    selectedConfigListPosition = clamp<int>(*value - min, 0, max - min);
 
     display.setControlPosition(configListControl, (800 / 8) * 4 + 1, -1);
     display.setControlSize(configListControl, ((800 / 8) * 2) - 3, -1);
 
     configList.linesCount = 14;
-    configList.start = *value;
+    configList.start = selectedConfigListPosition;
     configList.length = (max - min) + 1;
 
     if (ptrTempValuesList != nullptr)

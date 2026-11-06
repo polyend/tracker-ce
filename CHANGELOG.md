@@ -76,6 +76,9 @@ All notable changes to the **Polyend Tracker Community Edition (CE)** firmware a
    * Reactivated and expanded the JPEG image viewer under `Config > Info` with three user folders (`Reference`, `Notes`, and `Custom` in `/Images/<Folder>/1.jpg` … `48.jpg`), supporting Left/Right, Jog-wheel, and direct Pad `1–48` selection.
    * See [`docs/image_viewer.md`](docs/image_viewer.md).
 
+12. **Default Sequence Length (All 3 Devices)**
+   * Added a per-project `Default sequence length` setting under `Config > Project Settings` to choose the initial length (1-128 steps) for new sequences. Existing sequences are unchanged.
+
 ### Changed & Fixed
 
  * **Live Recording Improvements (All 3 Devices)**:
