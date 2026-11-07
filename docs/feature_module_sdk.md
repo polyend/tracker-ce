@@ -53,10 +53,25 @@ MODULE_HEADER   := MyModule.h
 MODULE_SRCS     := MyModule.cpp      # optional; defaults to all *.cpp
 ```
 
-### Build with an external directory
+### Interactive module picker
 
 ```bash
-# Default: bundled Performance FX Scenes
+make select
+# equivalent:
+python3 scripts/build_with_modules.py
+```
+
+Scans [`feature-modules/`](../feature-modules/) for directories with `module.mk`, lets you toggle modules and pick `all` / `original` / `plus` / `mini`, then runs `make` with `FEATURE_MODULE_DIRS` set. Last selection is stored in `.feature-modules-selection`.
+
+```bash
+make list-modules
+python3 scripts/build_with_modules.py --modules performance-fx-scenes --target plus
+```
+
+### Non-interactive build
+
+```bash
+# Default: every feature-modules/*/module.mk
 make all
 
 # Your own checkout(s), space-separated
@@ -66,7 +81,7 @@ make all FEATURE_MODULE_DIRS="$HOME/src/my-tracker-module /other/repo/another-mo
 make all FEATURE_MODULE_DIRS=
 ```
 
-The top-level [`Makefile`](../Makefile) passes `FEATURE_MODULE_DIRS` into `core/`. Defaults to [`feature-modules/performance-fx-scenes`](../feature-modules/performance-fx-scenes).
+The top-level [`Makefile`](../Makefile) passes `FEATURE_MODULE_DIRS` into `core/`.
 
 ---
 
@@ -186,13 +201,19 @@ extern MyModule myModule;
 
 ```makefile
 # module.mk
-MODULE_NAME     := my-module
-MODULE_INSTANCE := myModule
-MODULE_HEADER   := MyModule.h
-MODULE_SRCS     := MyModule.cpp
+MODULE_NAME        := my-module
+MODULE_TITLE       := My Module
+MODULE_DESCRIPTION := Short blurb shown in make select
+MODULE_INSTANCE    := myModule
+MODULE_HEADER      := MyModule.h
+MODULE_SRCS        := MyModule.cpp
 ```
 
 ```bash
+# Drop the folder into feature-modules/ and pick it with:
+make select
+
+# Or pass an absolute path from another repo:
 make all FEATURE_MODULE_DIRS="/absolute/path/to/my-module"
 ```
 

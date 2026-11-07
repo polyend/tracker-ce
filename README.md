@@ -92,6 +92,9 @@ make original   # -> build/PolyendTracker_CE_1.0.0.ptf
 make plus       # -> build/TrackerPlus_CE_1.0.0.ptf
 make mini       # -> build/TrackerMini_CE_1.0.0.ptf
 
+# Interactively choose feature-modules/ to include, then build:
+make select
+
 # Build reference .ptfx Sample Editor effects into editor-fx-sdk/build/Effects/:
 make ptfx
 

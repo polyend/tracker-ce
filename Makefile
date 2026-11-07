@@ -16,8 +16,11 @@ UTIL_DIR      := $(ROOT_DIR)/util
 OUT_DIR       := $(ROOT_DIR)/build
 
 # Space-separated list of external feature-module directories (other repos or local folders).
-# Each directory needs a module.mk — see feature-modules/performance-fx-scenes/ and docs/feature_module_sdk.md.
-FEATURE_MODULE_DIRS ?= $(ROOT_DIR)/feature-modules/performance-fx-scenes
+# Default: every subdirectory of feature-modules/ that contains module.mk.
+# Use `make select` to pick interactively, or override:
+#   make all FEATURE_MODULE_DIRS="/path/to/a /path/to/b"
+FEATURE_MODULES_ROOT ?= $(ROOT_DIR)/feature-modules
+FEATURE_MODULE_DIRS ?= $(shell find "$(FEATURE_MODULES_ROOT)" -mindepth 2 -maxdepth 2 -name module.mk -exec dirname {} \; 2>/dev/null | sort)
 
 include $(ROOT_DIR)/version.mk
 
@@ -27,7 +30,7 @@ MINI_POSTFIX     := $(EDITION_NAME)_$(MINI_VER_MAJOR).$(MINI_VER_MINOR).$(MINI_V
 
 .DEFAULT_GOAL := all
 
-.PHONY: all original plus mini ptfx clean version bump-patch bump-minor
+.PHONY: all original plus mini ptfx clean version bump-patch bump-minor select interactive list-modules
 
 all: original plus mini
 
@@ -104,6 +107,15 @@ ptfx:
 		base=$$(basename "$$src" .c); \
 		python3 "$(ROOT_DIR)/editor-fx-sdk/ptfx_builder.py" "$$src" -o "$(ROOT_DIR)/editor-fx-sdk/build/Effects/$$base.ptfx" --toolchain "$(TOOLCHAIN)"; \
 	done
+
+# Interactive feature-module picker + build (TTY required).
+# Example: make select
+#          make select TARGET=plus
+select interactive:
+	@python3 "$(ROOT_DIR)/scripts/build_with_modules.py" --target "$(if $(filter-out all,$(TARGET)),$(TARGET),all)"
+
+list-modules:
+	@python3 "$(ROOT_DIR)/scripts/build_with_modules.py" --list
 
 clean:
 	$(MAKE) -C "$(CORE_DIR)" clean PLATFORM=MK66 PRODUCT=ORIGINAL

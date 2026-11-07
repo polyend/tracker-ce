@@ -15,6 +15,9 @@ editor-fx-sdk/build/
 *.d
 *.su
 
+# Feature module picker state
+.feature-modules-selection
+
 # Python cache
 __pycache__/
 *.py[cod]

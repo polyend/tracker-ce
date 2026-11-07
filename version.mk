@@ -18,7 +18,7 @@ PLUS_VER_BETA      := 255
 
 # Tracker Mini (IMX)
 MINI_VER_MAJOR     := 1
-MINI_VER_MINOR     := 0
+MINI_VER_MINOR     := 1
 MINI_VER_PATCH     := 0
 MINI_VER_BETA      := 255
 
