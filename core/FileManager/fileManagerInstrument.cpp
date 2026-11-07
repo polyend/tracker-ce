@@ -309,7 +309,7 @@ bool cFileManager::loadSampleData(int idx,
             loadStatus = fileTransfer.loadInstrumentRawSampleDataToMemory(
               samplePath,
               resolvedDataOffset,
-              (uint8_t*)mtProject.instrument[idx].sample.address,
+              reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[idx].sample.address)),
               sampleDataSizeMax,
               currentSampleSamplesCount);
         }

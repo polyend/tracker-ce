@@ -30,9 +30,27 @@ MINI_POSTFIX     := $(EDITION_NAME)_$(MINI_VER_MAJOR).$(MINI_VER_MINOR).$(MINI_V
 
 .DEFAULT_GOAL := all
 
-.PHONY: all original plus mini ptfx clean version bump-patch bump-minor select interactive list-modules
+.PHONY: all original plus mini host ptfx clean version bump-patch bump-minor select interactive list-modules
 
 all: original plus mini
+
+HOST_DIR := $(ROOT_DIR)/platforms/host
+
+host:
+	@echo "=================================================================="
+	@echo " Building Host Emulator (Original Tracker core on desktop)"
+	@echo "=================================================================="
+	$(MAKE) -C "$(CORE_DIR)" -j$(NPROC) build \
+		PLATFORM=HOST PRODUCT=HOST \
+		POLYUTIL_DIR="$(UTIL_DIR)" \
+		POLYSYNTH_DIR="$(SYNTH_DIR)" \
+		FEATURE_MODULE_DIRS="$(FEATURE_MODULE_DIRS)"
+	$(MAKE) -C "$(HOST_DIR)" -j$(NPROC) build \
+		TRACKER_DIR="$(CORE_DIR)" \
+		POLYUTIL_DIR="$(UTIL_DIR)" \
+		POLYSYNTH_DIR="$(SYNTH_DIR)" \
+		ROOT_DIR="$(ROOT_DIR)"
+	@echo "-> Output: $(OUT_DIR)/tracker-host"
 
 original:
 	@echo "=================================================================="
@@ -121,9 +139,11 @@ clean:
 	$(MAKE) -C "$(CORE_DIR)" clean PLATFORM=MK66 PRODUCT=ORIGINAL
 	$(MAKE) -C "$(CORE_DIR)" clean PLATFORM=IMX PRODUCT=PLUS
 	$(MAKE) -C "$(CORE_DIR)" clean PLATFORM=IMX PRODUCT=MINI
+	$(MAKE) -C "$(CORE_DIR)" clean PLATFORM=HOST PRODUCT=HOST
 	$(MAKE) -C "$(MK66_DIR)" clean PRODUCT=ORIGINAL
 	$(MAKE) -C "$(IMX_DIR)" clean PRODUCT=PLUS
 	$(MAKE) -C "$(IMX_DIR)" clean PRODUCT=MINI
+	$(MAKE) -C "$(HOST_DIR)" clean
 	rm -rf "$(OUT_DIR)" "$(ROOT_DIR)/editor-fx-sdk/build"
 
 version:

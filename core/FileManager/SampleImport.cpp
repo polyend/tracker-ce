@@ -535,7 +535,7 @@ bool SampleImport::loadSampleDataToMemeory(int idx,
         loadStatus = fileTransfer.loadInstrumentRawSampleDataToMemory(
           srcSamplePath,
           offsetFromStruct,
-          (uint8_t*)mtProject.instrument[idx].sample.address,
+          reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[idx].sample.address)),
           sizeLimit,
           currentSampleSamplesCount);
     }

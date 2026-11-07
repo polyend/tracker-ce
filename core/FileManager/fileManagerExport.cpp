@@ -485,7 +485,8 @@ uint32_t cFileManager::getTotalSamplesMemoryExported()
     uint8_t* sampleAddress = (uint8_t*)externalRamSampleMemory;
     if (index > 0)
     {
-        sampleAddress = (uint8_t*)(mtProject.instrument[index].sample.address);
+        sampleAddress =
+          reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[index].sample.address));
     }
 
     exported =

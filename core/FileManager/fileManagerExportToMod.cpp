@@ -1358,7 +1358,7 @@ void cFileManager::exportItFile_ProcessWaves()
 
         if (instr->isActive && instr->sample.address != nullptr)
         {
-            waveSourceDataPtr = (uint8_t*)instr->sample.address;
+            waveSourceDataPtr = reinterpret_cast<uint8_t*>(static_cast<int16_t*>(instr->sample.address));
         }
 
         waveTotalBytes = instr->sample.length * 2;

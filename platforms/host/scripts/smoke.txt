@@ -1,0 +1,9 @@
+# Headless smoke script for the Tracker CE host emulator.
+# Boots, waits for the UI, taps Play, waits, screenshots, quits.
+
+wait 500
+screenshot boot.ppm
+tap PLAY
+wait 1000
+screenshot after_play.ppm
+quit

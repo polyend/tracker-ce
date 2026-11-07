@@ -36,7 +36,7 @@ bool cFileManager::saveSampleDataToWorkspace(int idx)
 
     sprintf(currentCopyDestPath, cWorkspaceInstrumentFileFormatNew, idx + 1);
 
-    uint8_t* dataSourceAddress = (uint8_t*)mtProject.instrument[idx].sample.address;
+    uint8_t* dataSourceAddress = reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[idx].sample.address));
     uint32_t dataSizeBytes = 0;
 
     if (isInstrumentStereo(idx))
@@ -175,16 +175,16 @@ void cFileManager::moveSampleMemory(int firstSlotToMoveInMemory, int32_t memory_
 #ifdef FILEMANAGER_DEBUGLOG
     LOGF("first slot: %d adress: %d \n",
          firstSlotToMoveInMemory,
-         (uint8_t*)mtProject.instrument[firstSlotToMoveInMemory].sample.address);
+         reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[firstSlotToMoveInMemory].sample.address)));
     LOGF("last slot: %d adress: %d length: %d \n",
          last_instrument_to_move,
-         (uint8_t*)mtProject.instrument[last_instrument_to_move].sample.address,
+         reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[last_instrument_to_move].sample.address)),
          mtProject.instrument[last_instrument_to_move].sample.length * 2);
 #endif
 
     // wyznacz blok pamieci do przesuniecia
     uint8_t* begining_address =
-      (uint8_t*)mtProject.instrument[firstSlotToMoveInMemory].sample.address;
+      reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[firstSlotToMoveInMemory].sample.address));
 
     uint32_t lastRamFrames =
       mtProject.sampleMemory[last_instrument_to_move].isStreamed
@@ -193,7 +193,7 @@ void cFileManager::moveSampleMemory(int firstSlotToMoveInMemory, int32_t memory_
              ? mtProject.sampleMemory[last_instrument_to_move].ramFrames
              : mtProject.instrument[last_instrument_to_move].sample.length);
 
-    uint8_t* end_address = (uint8_t*)mtProject.instrument[last_instrument_to_move].sample.address +
+    uint8_t* end_address = reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[last_instrument_to_move].sample.address)) +
                            lastRamFrames * 2 *
                              (isInstrumentStereo(last_instrument_to_move) ? 2 : 1);
 
@@ -221,7 +221,7 @@ void cFileManager::moveSampleMemory(int firstSlotToMoveInMemory, int32_t memory_
                      : mtProject.instrument[idx].sample.length);
 
             mtProject.instrument[idx].sample.address =
-              (int16_t*)(((uint8_t*)mtProject.instrument[idx].sample.address) + memory_offset);
+              (int16_t*)((reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[idx].sample.address))) + memory_offset);
 
             mtProject.sampleMemory[idx].address[strSampleMemory::Channel::kLeft] =
               mtProject.instrument[idx].sample.address;

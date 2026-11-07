@@ -132,8 +132,8 @@ void InstrumentCopy::copyInstrumentInit()
 
 void InstrumentCopy::copyInstrumentSampleMemory(int srcIdx, int destIdx)
 {
-    uint8_t* srcAddr = (uint8_t*)mtProject.instrument[srcIdx].sample.address;
-    uint8_t* destAddr = (uint8_t*)mtProject.instrument[destIdx].sample.address;
+    uint8_t* srcAddr = reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[srcIdx].sample.address));
+    uint8_t* destAddr = reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[destIdx].sample.address));
     uint32_t ramFrames =
       mtProject.sampleMemory[destIdx].isStreamed
         ? mtProject.sampleMemory[destIdx].ramFrames
