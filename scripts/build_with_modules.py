@@ -38,6 +38,7 @@ class ModuleInfo:
     path: Path
     title: str
     description: str
+    order: int = 100
 
 
 def parse_module_mk(path: Path) -> dict[str, str]:
@@ -67,7 +68,20 @@ def discover_modules(modules_dir: Path) -> list[ModuleInfo]:
         name = values.get("MODULE_NAME") or child.name
         title = values.get("MODULE_TITLE") or name.replace("-", " ").title()
         description = values.get("MODULE_DESCRIPTION") or ""
-        modules.append(ModuleInfo(name=name, path=child.resolve(), title=title, description=description))
+        try:
+            order = int(values.get("MODULE_ORDER", "100"))
+        except ValueError:
+            order = 100
+        modules.append(
+            ModuleInfo(
+                name=name,
+                path=child.resolve(),
+                title=title,
+                description=description,
+                order=order,
+            )
+        )
+    modules.sort(key=lambda m: (m.order, m.name))
     return modules
 
 
@@ -300,7 +314,9 @@ def main() -> int:
     if not args.no_save:
         save_selection(selected_names)
 
-    module_dirs = [by_name[name].path for name in sorted(selected_names)]
+    # Preserve MODULE_ORDER for Performance page cycling.
+    ordered = [m for m in modules if m.name in selected_names]
+    module_dirs = [m.path for m in ordered]
     return build(target, module_dirs)
 
 

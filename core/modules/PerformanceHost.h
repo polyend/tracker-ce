@@ -3,11 +3,15 @@
 
 #include <stdint.h>
 
-// Snapshot of the 12 Performance FX slots. Owned by feature modules that
-// store/recall scenes; filled and applied through PerformancePageHost.
+// Snapshot sizes match firmware track counts in mtStructs.h
+// (kSampleTracks=8, kMidiTracks=8, kPerformanceTracks=16).
+static constexpr uint8_t kPerfHostSampleTracks = 8;
+static constexpr uint8_t kPerfHostMidiTracks = 8;
+static constexpr uint8_t kPerfHostPerformanceTracks = 16;
 static constexpr uint8_t kPerfFxSceneSlotCount = 12;
 static constexpr uint8_t kPerfFxSceneNameLength = 16;
 
+// Snapshot of the 12 Performance FX slots.
 struct strPerfScene
 {
     char name[kPerfFxSceneNameLength];
@@ -18,6 +22,26 @@ struct strPerfScene
 };
 
 static_assert(sizeof(strPerfScene) % 4 == 0, "strPerfScene must be 4-byte aligned for FatFs DMA");
+
+// Per-track Performance pattern launch cues (live mtProject.perfTracksPatterns).
+struct strPatternScene
+{
+    char name[kPerfFxSceneNameLength];
+    uint16_t trackPatterns[kPerfHostPerformanceTracks];
+};
+
+static_assert(sizeof(strPatternScene) % 4 == 0,
+              "strPatternScene must be 4-byte aligned for FatFs DMA");
+
+// Sample + MIDI mute masks.
+struct strMuteScene
+{
+    char name[kPerfFxSceneNameLength];
+    uint8_t sampleMute[kPerfHostSampleTracks];
+    uint8_t midiMute[kPerfHostMidiTracks];
+};
+
+static_assert(sizeof(strMuteScene) % 4 == 0, "strMuteScene must be 4-byte aligned for FatFs DMA");
 
 // Button state values forwarded to PerformancePage::onScreenButton.
 // Matches firmware buttonStates (interfaceDefs.h).
@@ -49,6 +73,12 @@ class PerformancePageHost
 
     virtual void captureFxScene(strPerfScene& scene) = 0;
     virtual void recallFxScene(const strPerfScene& scene) = 0;
+
+    virtual void capturePatternScene(strPatternScene& scene) = 0;
+    virtual void recallPatternScene(const strPatternScene& scene) = 0;
+
+    virtual void captureMuteScene(strMuteScene& scene) = 0;
+    virtual void recallMuteScene(const strMuteScene& scene) = 0;
 };
 
 // Firmware-provided host for Performance Mode pages.

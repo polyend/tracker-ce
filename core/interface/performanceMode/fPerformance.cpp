@@ -139,6 +139,7 @@ void cPerformanceMode::start(uint32_t options)
     refreshBlinkingTrack = 0;
     dontClearPerformanceMode = 0;
     activePerformancePage = nullptr;
+    activePerformancePageIndex = 0;
 
     // ustawienie funkcji
     ip->setButtonObj(interfaceButtonPerformance, buttonPress, functSwitchTracksPage);
@@ -702,15 +703,13 @@ static void functSwitchTracksPage()
 #else
     if (PM->buttons->isButtonPressed(interfaceButtonShift))
     {
-        if (PM->isPerformancePageActive())
-        {
-            PM->hidePerformancePage();
-            bindTrackActionButtons();
-        }
-        else if (featureModules.getPerformancePage(0) != nullptr)
+        if (PM->cyclePerformancePage())
         {
             bindPerformancePageButtons();
-            PM->showPerformancePage(featureModules.getPerformancePage(0));
+        }
+        else
+        {
+            bindTrackActionButtons();
         }
         return;
     }
@@ -998,15 +997,13 @@ static void functMiniMiddle(uint8_t state)
 #ifdef TRACKER_MINI
     if (state == buttonPress)
     {
-        if (PM->isPerformancePageActive())
-        {
-            PM->hidePerformancePage();
-            bindTrackActionButtons();
-        }
-        else if (featureModules.getPerformancePage(0) != nullptr)
+        if (PM->cyclePerformancePage())
         {
             bindPerformancePageButtons();
-            PM->showPerformancePage(featureModules.getPerformancePage(0));
+        }
+        else
+        {
+            bindTrackActionButtons();
         }
     }
 #else

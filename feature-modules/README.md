@@ -2,11 +2,21 @@
 
 External compile-time modules for Tracker CE. Each directory is a self-contained feature that uses the Feature Module SDK (`core/modules/`) and is linked into the firmware via `FEATURE_MODULE_DIRS`.
 
-## Bundled example
+## Bundled modules
 
-| Directory | Module | Sidecar |
+| Directory | Page title | Sidecar | Cycle order |
+| :--- | :--- | :--- | ---: |
+| [`performance-fx-scenes/`](performance-fx-scenes/) | Scenes | `perfscenes.bin` | 10 |
+| [`pattern-launch-scenes/`](pattern-launch-scenes/) | Patterns | `patternscenes.bin` | 20 |
+| [`mute-banks/`](mute-banks/) | Mutes | `mutebanks.bin` | 30 |
+
+In Performance Mode, **Shift + Performance** (desktop) or **Middle** (Mini) cycles these pages in `MODULE_ORDER`, then returns to the track strip.
+
+| Page | Store | Recall |
 | :--- | :--- | :--- |
-| [`performance-fx-scenes/`](performance-fx-scenes/) | Performance FX Scenes | `perfscenes.bin` |
+| Scenes | Shift + screen button | Screen button — FX rack snapshot |
+| Patterns | Shift + screen button | Screen button — per-track pattern cues |
+| Mutes | Shift + screen button | Screen button — sample + MIDI mute masks |
 
 ## Build
 
@@ -22,7 +32,7 @@ Arrow keys / `j` `k` move, `space` toggles a module, `t` / left-right cycles the
 
 ```bash
 make list-modules
-python3 scripts/build_with_modules.py --modules performance-fx-scenes --target plus
+python3 scripts/build_with_modules.py --modules performance-fx-scenes pattern-launch-scenes --target plus
 ```
 
 ### Non-interactive
@@ -42,9 +52,11 @@ make all FEATURE_MODULE_DIRS=
 
 ```text
 my-module/
-├── module.mk              # MODULE_NAME, MODULE_TITLE, MODULE_DESCRIPTION, ...
+├── module.mk              # MODULE_NAME, MODULE_TITLE, MODULE_DESCRIPTION, MODULE_ORDER, ...
 ├── MyModule.h
 └── MyModule.cpp
 ```
+
+`MODULE_ORDER` controls Performance page cycle order (lower first). Default is `100`.
 
 See [`docs/feature_module_sdk.md`](../docs/feature_module_sdk.md).

@@ -150,31 +150,34 @@ class PerformancePage
 };
 ```
 
-`PerformancePageHost` (implemented by firmware) is the only UI/FX API a page should call:
+`PerformancePageHost` (implemented by firmware) is the only UI/engine API a page should call:
 
 * `setPageTitle`, `setScreenLabel`, `finishScreenLabels`
 * `restoreTrackLabels`, `refreshFxRack`
 * `isShiftPressed`
-* `captureFxScene` / `recallFxScene` (`strPerfScene` snapshot of the 12 FX slots)
+* `captureFxScene` / `recallFxScene` (`strPerfScene` — 12 FX slots)
+* `capturePatternScene` / `recallPatternScene` (`strPatternScene` — per-track pattern cues)
+* `captureMuteScene` / `recallMuteScene` (`strMuteScene` — sample + MIDI mute masks)
 
 Controls:
 
-* Desktop: **Shift + Performance** toggles the first registered page
-* Tracker Mini: **Middle** toggles the first page
+* Desktop: **Shift + Performance** cycles registered pages in `MODULE_ORDER`, then returns to the track strip
+* Tracker Mini: **Middle** cycles the same way
 * Screen buttons `0`–`7` → `onScreenButton`
 
 New top-level screens still use `ModuleBase` and the fixed `Interface::modules[]` table (slot `11` reserved).
 
 ---
 
-## 6. Reference module: Performance FX Scenes
+## 6. Bundled modules
 
-[`feature-modules/performance-fx-scenes/`](../feature-modules/performance-fx-scenes) is the bundled external example:
+| Directory | Title | `id()` / sidecar | `MODULE_ORDER` |
+| :--- | :--- | :--- | ---: |
+| [`performance-fx-scenes/`](../feature-modules/performance-fx-scenes) | Scenes | `perfscenes` | 10 |
+| [`pattern-launch-scenes/`](../feature-modules/pattern-launch-scenes) | Patterns | `patternscenes` | 20 |
+| [`mute-banks/`](../feature-modules/mute-banks) | Mutes | `mutebanks` | 30 |
 
-* Display name **Scenes** / title `"Scenes"`
-* `id()` → `"perfscenes"` (compatible `perfscenes.bin`)
-* 8 scene slots, shift-to-store / recall
-* Uses only SDK headers + `ModuleSidecar` + `PerformancePageHost`
+All three use only SDK headers + `ModuleSidecar` + `PerformancePageHost`. Shift + screen button stores; screen button recalls.
 
 ---
 
@@ -204,6 +207,7 @@ extern MyModule myModule;
 MODULE_NAME        := my-module
 MODULE_TITLE       := My Module
 MODULE_DESCRIPTION := Short blurb shown in make select
+MODULE_ORDER       := 40              # Performance page cycle order (lower first)
 MODULE_INSTANCE    := myModule
 MODULE_HEADER      := MyModule.h
 MODULE_SRCS        := MyModule.cpp

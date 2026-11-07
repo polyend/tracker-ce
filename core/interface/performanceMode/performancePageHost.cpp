@@ -2,9 +2,15 @@
 
 #include "core/interfaceDefs.h"
 #include "display.h"
+#include "fileManager.h"
+#include "mtAudioEngine.h"
+#include "mtSequencer.h"
+#include "mtStructs.h"
 #include "performanceEngine.h"
 #include "performanceMode.h"
 #include "titleBar.h"
+
+#include <cstring>
 
 class PerformancePageHostImpl : public PerformancePageHost
 {
@@ -63,6 +69,68 @@ class PerformancePageHostImpl : public PerformancePageHost
     void captureFxScene(strPerfScene& scene) override { performance.captureScene(scene); }
 
     void recallFxScene(const strPerfScene& scene) override { performance.recallScene(scene); }
+
+    void capturePatternScene(strPatternScene& scene) override
+    {
+        memset(scene.name, 0, sizeof(scene.name));
+        for (uint8_t track = 0; track < kPerfHostPerformanceTracks; track++)
+        {
+            if (track < kPerformanceTracks)
+            {
+                scene.trackPatterns[track] = mtProject.perfTracksPatterns[track];
+            }
+            else
+            {
+                scene.trackPatterns[track] = 1;
+            }
+        }
+    }
+
+    void recallPatternScene(const strPatternScene& scene) override
+    {
+        for (uint8_t track = 0; track < kPerformanceTracks && track < kPerfHostPerformanceTracks;
+             track++)
+        {
+            uint16_t pattern = scene.trackPatterns[track];
+            if (pattern < 1)
+            {
+                pattern = 1;
+            }
+            mtProject.perfTracksPatterns[track] = pattern;
+            sequencer.setTrackToLoadNow(track, pattern);
+        }
+        newFileManager.setProjectStructChanged();
+        performanceMode.refreshTrackPattern = 1;
+    }
+
+    void captureMuteScene(strMuteScene& scene) override
+    {
+        memset(scene.name, 0, sizeof(scene.name));
+        for (uint8_t i = 0; i < kPerfHostSampleTracks && i < kSampleTracks; i++)
+        {
+            scene.sampleMute[i] = mtProject.values.trackMute[i] ? 1 : 0;
+        }
+        for (uint8_t i = 0; i < kPerfHostMidiTracks && i < kMaxMidiTracksInTrackers; i++)
+        {
+            scene.midiMute[i] = mtProject.values.midiTrackMute[i] ? 1 : 0;
+        }
+    }
+
+    void recallMuteScene(const strMuteScene& scene) override
+    {
+        for (uint8_t i = 0; i < kSampleTracks && i < kPerfHostSampleTracks; i++)
+        {
+            uint8_t muted = scene.sampleMute[i] ? 1 : 0;
+            mtProject.values.trackMute[i] = muted;
+            engine.muteTrack(i, muted);
+        }
+        for (uint8_t i = 0; i < kMaxMidiTracksInTrackers && i < kPerfHostMidiTracks; i++)
+        {
+            mtProject.values.midiTrackMute[i] = scene.midiMute[i] ? 1 : 0;
+        }
+        newFileManager.setProjectStructChanged();
+        performanceMode.refreshTrackState = 1;
+    }
 };
 
 static PerformancePageHostImpl s_performancePageHost;

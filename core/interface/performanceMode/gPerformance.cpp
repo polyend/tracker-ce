@@ -379,18 +379,53 @@ void cPerformanceMode::hidePerformancePage()
 
     PerformancePage* page = activePerformancePage;
     activePerformancePage = nullptr;
+    activePerformancePageIndex = 0;
     page->onHide(getPerformancePageHost());
 }
 
 void cPerformanceMode::togglePerformancePage()
 {
-    if (activePerformancePage != nullptr)
+    cyclePerformancePage();
+}
+
+bool cPerformanceMode::cyclePerformancePage()
+{
+    const uint8_t pageCount = featureModules.performancePageCount();
+    if (pageCount == 0)
     {
-        hidePerformancePage();
-        return;
+        if (activePerformancePage != nullptr)
+        {
+            hidePerformancePage();
+        }
+        return false;
     }
 
-    showPerformancePage(featureModules.getPerformancePage(0));
+    if (activePerformancePage == nullptr)
+    {
+        activePerformancePageIndex = 0;
+        showPerformancePage(featureModules.getPerformancePage(0));
+        return activePerformancePage != nullptr;
+    }
+
+    const uint8_t nextIndex = static_cast<uint8_t>(activePerformancePageIndex + 1);
+    if (nextIndex >= pageCount)
+    {
+        hidePerformancePage();
+        return false;
+    }
+
+    PerformancePage* nextPage = featureModules.getPerformancePage(nextIndex);
+    if (nextPage == nullptr)
+    {
+        hidePerformancePage();
+        return false;
+    }
+
+    // Switch pages without restoring the track strip between them.
+    activePerformancePageIndex = nextIndex;
+    activePerformancePage = nextPage;
+    nextPage->onShow(getPerformancePageHost());
+    return true;
 }
 
 void cPerformanceMode::showMuteButtons(uint8_t state)
