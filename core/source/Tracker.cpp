@@ -1,4 +1,5 @@
 #include "FeatureModuleRegistry.h"
+#include "PerformanceHost.h"
 #include "Platform.h"
 #include "Profiler.h"
 #include "TrackerImpl.h"
@@ -15,6 +16,8 @@
 #include "mtSequencer.h"
 #include "mtSleep.h"
 #include "mtSliceDetector.h"
+#include "mtStructs.h"
+#include "performanceMode/performanceMode.h"
 
 #include <cr_section_macros.h>
 
@@ -165,6 +168,40 @@ void TrackerImpl::update()
     sliceDetector.update();
     newFileManager.update();
     featureModules.updateAll();
+
+    // Recall Performance FX scenes assigned to song rows on the main thread.
+    // playlistPos is updated from the audio path; latch changes here.
+    {
+        static bool wasPlayingSong = false;
+        static int16_t lastRecalledSongSlot = -1;
+
+        SongSlotBinding* binding = featureModules.getSongSlotBinding();
+        // Performance Mode reports SEQ_STATE_PLAY_PERFORMANCE even while songMode is on.
+        const bool playingSong = sequencer.isPlay() && sequencer.isSongMode();
+
+        if (binding != nullptr && playingSong)
+        {
+            const uint8_t songSlot = mtProject.song.playlistPos;
+            if (!wasPlayingSong || lastRecalledSongSlot != static_cast<int16_t>(songSlot))
+            {
+                lastRecalledSongSlot = songSlot;
+                binding->onSlotStart(songSlot);
+
+                if (mtInterface.isPerformanceModeScreenActive() &&
+                    !performanceMode.isPerformancePageActive())
+                {
+                    getPerformancePageHost().refreshFxRack();
+                }
+            }
+            wasPlayingSong = true;
+        }
+        else
+        {
+            wasPlayingSong = false;
+            lastRecalledSongSlot = -1;
+        }
+    }
+
     mtInterface.update();
     engine.updateSdStream();
     sequencer.update();

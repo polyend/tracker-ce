@@ -105,3 +105,16 @@ PerformancePage* FeatureModuleRegistry::getPerformancePage(uint8_t index) const
     }
     return nullptr;
 }
+
+SongSlotBinding* FeatureModuleRegistry::getSongSlotBinding() const
+{
+    for (uint8_t i = 0; i < moduleCount; i++)
+    {
+        SongSlotBinding* binding = modules[i]->songSlotBinding();
+        if (binding != nullptr)
+        {
+            return binding;
+        }
+    }
+    return nullptr;
+}

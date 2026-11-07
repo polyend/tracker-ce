@@ -73,11 +73,18 @@ class cSongEditor : public ModuleBase
 
     void changeSongPositionSelection(int16_t value);
     void changeSelectedPlayListPattern(int value);
+    void changeSelectedSongScene(int delta);
 
     void readSong();
 
     void changeGlobalTempo(float value);
     void setDefaultGlobalTempo();
+
+    bool hasSceneColumn() const;
+    uint8_t scenePlace() const { return 2; }
+    uint8_t tempoPlace() const;
+    void configureFramePlaces();
+    void refreshPatternSceneButtonLabels();
 
     //--------------------------------------------------------------
 

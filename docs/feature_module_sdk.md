@@ -103,6 +103,7 @@ class FeatureModule
     virtual void update() {} // main thread only
 
     virtual PerformancePage* performancePage() { return nullptr; }
+    virtual SongSlotBinding* songSlotBinding() { return nullptr; }
 };
 ```
 
@@ -114,6 +115,16 @@ class FeatureModule
 | `onProjectOpen` | Project open |
 | `onProjectSave` | Project save |
 | `update` | `TrackerImpl::update` (main thread) |
+
+Optional `SongSlotBinding` (via `songSlotBinding()`):
+
+* `values()` — one byte per playlist slot (`0` = none, `1..8` = scene)
+* `cycle(slot, delta)` / `assign(slot, scene)` — edit the selected song row from the Song screen
+* `onInserted` / `onRemoved` — keep assignments aligned with Add/Delete Slot
+* `clearAll()` — after MOD/IT import replaces the playlist
+* `onSlotStart(slot)` — main-thread recall when song playback enters that row
+
+`FeatureModuleRegistry::getSongSlotBinding()` returns the first registered binding. `SongSlotBinding::kSongSlotCount` must match `SONG_MAX` (255).
 
 Depend only on SDK + `Platform.h` / `cr_section_macros.h` for `__NOINIT(EXTERNAL_RAM)`. Do **not** include `performanceMode.h`, `display.h`, or File Manager headers from an external module.
 
@@ -173,7 +184,7 @@ New top-level screens still use `ModuleBase` and the fixed `Interface::modules[]
 
 | Directory | Title | `id()` / sidecar | `MODULE_ORDER` |
 | :--- | :--- | :--- | ---: |
-| [`performance-fx-scenes/`](../feature-modules/performance-fx-scenes) | Scenes | `perfscenes` | 10 |
+| [`performance-fx-scenes/`](../feature-modules/performance-fx-scenes) | Scenes (+ song-row map) | `perfscenes` | 10 |
 | [`pattern-launch-scenes/`](../feature-modules/pattern-launch-scenes) | Patterns | `patternscenes` | 20 |
 | [`mute-banks/`](../feature-modules/mute-banks) | Mutes | `mutebanks` | 30 |
 

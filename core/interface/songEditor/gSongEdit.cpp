@@ -1,24 +1,49 @@
 #include "songEditor/songEditor.h"
 
+#include "FeatureModuleRegistry.h"
 #include "Platform.h"
 #include "mtSequencer.h"
 #include "string.h"
 
-static const uint16_t framesPlaces[3][4] = {
+static const uint16_t framesPlacesNoScene[3][4] = {
     { (800 / 8) * 0 + 1, 31, 500 - 3, 391 },
     { (800 / 8) * 5 + 1, 31, 800 / 4 - 3, 391 },
     { (800 / 8) * 7 + 1, 31, 800 / 8 - 3, 391 },
 };
 
+static const uint16_t framesPlacesWithScene[4][4] = {
+    { (800 / 8) * 0 + 1, 31, 500 - 3, 391 },
+    { (800 / 8) * 5 + 1, 31, 155, 391 },
+    { 656, 31, 42, 391 },
+    { (800 / 8) * 7 + 1, 31, 800 / 8 - 3, 391 },
+};
+
+void cSongEditor::configureFramePlaces()
+{
+    if (hasSceneColumn())
+    {
+        frameData.placesCount = 4;
+        frameData.startPlace = 3;
+        frameData.places[0] = &framesPlacesWithScene[0][0];
+        frameData.places[1] = &framesPlacesWithScene[1][0];
+        frameData.places[2] = &framesPlacesWithScene[2][0];
+        frameData.places[3] = &framesPlacesWithScene[3][0];
+    }
+    else
+    {
+        frameData.placesCount = 3;
+        frameData.startPlace = 2;
+        frameData.places[0] = &framesPlacesNoScene[0][0];
+        frameData.places[1] = &framesPlacesNoScene[1][0];
+        frameData.places[2] = &framesPlacesNoScene[2][0];
+        frameData.places[3] = nullptr;
+    }
+}
+
 void cSongEditor::initDisplayControls()
 {
     strControlProperties prop;
-    frameData.placesCount = 3;
-    frameData.startPlace = 2;
-
-    frameData.places[0] = &framesPlaces[0][0];
-    frameData.places[1] = &framesPlaces[1][0];
-    frameData.places[2] = &framesPlaces[2][0];
+    configureFramePlaces();
 
     prop.style = 0;
     prop.value = 0;
@@ -182,8 +207,7 @@ void cSongEditor::showDefaultScreen()
     display.setControlText(label[4], "Delete");
     display.setControlText2(label[4], "Slot");
 
-    display.setControlText(label[5], "Pattern");
-    display.setControlText2(label[5], "");
+    refreshPatternSceneButtonLabels();
 
     display.setControlText(label[6], "");
     display.setControlText2(label[6], "");
@@ -346,12 +370,29 @@ void cSongEditor::refreshButtonsLabels()
 
 //==============================================================================================================
 
+void cSongEditor::refreshPatternSceneButtonLabels()
+{
+    if (hasSceneColumn() && selectedPlace == scenePlace())
+    {
+        display.setControlText(label[5], "Scene");
+        display.setControlText2(label[5], "");
+    }
+    else
+    {
+        display.setControlText(label[5], "Pattern");
+        display.setControlText2(label[5], "");
+    }
+    display.refreshControl(label[5]);
+}
+
 void cSongEditor::activateLabelsBorder()
 {
     if (selectedPlace > frameData.placesCount - 1)
         return;
 
-    if (selectedPlace == 2) // tempo
+    songPlayerData.isSceneColumnActive = 0;
+
+    if (selectedPlace == tempoPlace()) // tempo
     {
         display.setControlValue(frameControl, selectedPlace);
         display.setControlShow(frameControl);
@@ -359,6 +400,20 @@ void cSongEditor::activateLabelsBorder()
         songPlayerData.isListActive = 0;
         songPlayerData.selection.isActive = 0;
         display.refreshControl(songPlayerControl);
+        refreshPatternSceneButtonLabels();
+        display.synchronizeRefresh();
+        return;
+    }
+    else if (hasSceneColumn() && selectedPlace == scenePlace()) // scene column
+    {
+        songPlayerData.isListActive = 1;
+        songPlayerData.isSceneColumnActive = 1;
+        songPlayerData.selection.isActive = 0;
+        display.setControlValue(frameControl, selectedPlace);
+        display.setControlShow(frameControl);
+        display.refreshControl(frameControl);
+        display.refreshControl(songPlayerControl);
+        refreshPatternSceneButtonLabels();
         display.synchronizeRefresh();
         return;
     }
@@ -377,6 +432,7 @@ void cSongEditor::activateLabelsBorder()
 
     display.setControlHide(frameControl);
     display.refreshControl(frameControl);
+    refreshPatternSceneButtonLabels();
     display.synchronizeRefresh();
 }
 

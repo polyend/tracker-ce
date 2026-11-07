@@ -195,6 +195,11 @@ void cSongPlayer::update()
     API_COLOR(colors[0]);
     API_CMD_TEXT(600, posY + 30, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, "Pattern");
 
+    if (controlData != nullptr && controlData->songSlotScenes != nullptr)
+    {
+        API_CMD_TEXT(680, posY + 30, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, "FX");
+    }
+
     showList();
 }
 
@@ -221,10 +226,12 @@ void cSongPlayer::showList()
         return;
     }
 
+    const bool hasScenes = controlData != nullptr && controlData->songSlotScenes != nullptr;
     int16_t posY = this->posY + 62;
     int16_t width = 210;
     int16_t posX = (this->posX + this->width) - width;
     int16_t height = this->height - 30;
+    const int16_t sceneX = posX + width - 22;
 
     int16_t x_pos = posX, y_pos, h_row = 27; // font->height+8;
     uint16_t w_bar = width - 6;              // szerokosc ramki
@@ -318,6 +325,10 @@ void cSongPlayer::showList()
             }
 
             drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
+            if (hasScenes)
+            {
+                drawSceneValue(i + textListPos, sceneX, y_pos + (i * h_row));
+            }
         }
 
         API_RESTORE_CONTEXT();
@@ -491,6 +502,10 @@ void cSongPlayer::showList()
                     }
 
                     drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
+                    if (hasScenes)
+                    {
+                        drawSceneValue(i + textListPos, sceneX, y_pos + (i * h_row));
+                    }
                 }
             }
             else if (dir == -1) // tekst porusza sie w dol (wartosci w gore)
@@ -527,6 +542,10 @@ void cSongPlayer::showList()
                     }
 
                     drawIcon(i + table_offset, i, x_pos, y_pos, h_row);
+                    if (hasScenes)
+                    {
+                        drawSceneValue(i + table_offset, sceneX, y_pos + (i * h_row));
+                    }
                 }
             }
         }
@@ -559,6 +578,10 @@ void cSongPlayer::showList()
                 }
 
                 drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
+                if (hasScenes)
+                {
+                    drawSceneValue(i + textListPos, sceneX, y_pos + (i * h_row));
+                }
             }
         }
 
@@ -611,6 +634,25 @@ void cSongPlayer::drawIcon(int pos, int row, int x, int y, int h)
             API_END();
         }
     }
+}
+
+void cSongPlayer::drawSceneValue(int slotIndex, int16_t x, int16_t y)
+{
+    if (controlData == nullptr || controlData->songSlotScenes == nullptr || slotIndex < 0)
+    {
+        return;
+    }
+
+    const uint8_t value = controlData->songSlotScenes[slotIndex];
+    if (value == 0)
+    {
+        API_COLOR(colors[1]);
+        API_CMD_TEXT(x, y, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, "-");
+        return;
+    }
+
+    API_COLOR(colors[0]);
+    API_CMD_NUMBER(x, y, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, value);
 }
 
 void cSongPlayer::drawTrackNames()

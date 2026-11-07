@@ -3,6 +3,7 @@
 
 #include "mtSequencer.h"
 
+#include "FeatureModuleRegistry.h"
 #include "fileManager.h"
 #include "fileTransfer.h"
 #include "log.h"
@@ -202,6 +203,10 @@ void cFileManager::importItFile_ProcessSong()
             {
                 mtProject.song.playlist[a]++;
             }
+        }
+        if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+        {
+            binding->clearAll();
         }
 
         moveToNextOperationStep();

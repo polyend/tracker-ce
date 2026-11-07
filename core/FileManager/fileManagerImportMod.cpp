@@ -3,6 +3,7 @@
 
 #include "mtSequencer.h"
 
+#include "FeatureModuleRegistry.h"
 #include "fileManager.h"
 #include "fileTransfer.h"
 #include "log.h"
@@ -417,6 +418,10 @@ void cFileManager::importModFile_Patterns()
     for (uint8_t a = 0; a < 128; a++)
     {
         mtProject.song.playlist[a] = modSong.playlist[a] + 1;
+    }
+    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+    {
+        binding->clearAll();
     }
 
     // mod narzuca length 64

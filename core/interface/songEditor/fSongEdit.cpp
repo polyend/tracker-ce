@@ -7,11 +7,15 @@
 #include "patternEditor/patternEditor.h" // todo zrobic cos z tym
 #include "performanceMode/performanceMode.h"
 
+#include "FeatureModuleRegistry.h"
 #include "Platform.h"
 #include "mtPadBoard.h"
 #include "mtPadsBacklight.h"
 #include "mtStructs.h"
 #include "util_math.h"
+
+static_assert(SongSlotBinding::kSongSlotCount == SONG_MAX,
+              "SongSlotBinding::kSongSlotCount must match SONG_MAX");
 
 cSongEditor songEditor;
 
@@ -379,6 +383,13 @@ static void functIncPattern(uint8_t state)
         return;
     }
 
+    if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    {
+        SE->changeSelectedSongScene(1);
+        SE->activateLabelsBorder();
+        return;
+    }
+
     if (SE->buttons->isButtonPressed(interfaceButtonShift))
     {
         SE->changeSelectedPlayListPattern(10);
@@ -408,6 +419,13 @@ static void functDecPattern(uint8_t state)
     }
     if (state == buttonRelease)
     {
+        return;
+    }
+
+    if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    {
+        SE->changeSelectedSongScene(-1);
+        SE->activateLabelsBorder();
         return;
     }
 
@@ -477,10 +495,14 @@ static void functAddSlot()
         mtProject.song.playlist[i] = mtProject.song.playlist[i - 1];
     }
 
+    const bool duplicateSlot = !(isShiftPressed && firstEmptyPatternFound);
     mtProject.song.playlist[SE->selectedSongPosition + 1] =
-      (isShiftPressed && firstEmptyPatternFound)
-        ? firstEmptyPatternIdx
-        : mtProject.song.playlist[SE->selectedSongPosition];
+      duplicateSlot ? mtProject.song.playlist[SE->selectedSongPosition] : firstEmptyPatternIdx;
+
+    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+    {
+        binding->onInserted(SE->selectedSongPosition, duplicateSlot);
+    }
 
     SE->songLength++;
 
@@ -522,6 +544,11 @@ static void functDeleteSlot()
     for (int i = SE->selectedSongPosition; i < SE->songLength; i++)
     {
         mtProject.song.playlist[i] = mtProject.song.playlist[i + 1];
+    }
+
+    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+    {
+        binding->onRemoved(SE->selectedSongPosition);
     }
 
     SE->songLength--;
@@ -624,14 +651,14 @@ static void functTempo(uint8_t state)
 
     if (state == buttonPress)
     {
-        if (SE->selectedPlace == 2)
+        if (SE->selectedPlace == SE->tempoPlace())
         {
             SE->tapTempo_tap();
             return;
         }
         else
         {
-            SE->selectedPlace = 2;
+            SE->selectedPlace = SE->tempoPlace();
         }
     }
     else if (state == buttonRelease)
@@ -654,33 +681,38 @@ static void functEncoder(int16_t value)
         return;
     }
 
-    switch (SE->selectedPlace)
+    if (SE->selectedPlace == 1)
     {
-        case 1:
+        if (SE->buttons->isButtonPressed(interfaceButtonShift))
         {
-            if (SE->buttons->isButtonPressed(interfaceButtonShift))
-            {
-                SE->changeSelectedPlayListPattern(value);
-            }
-            else
-            {
-                SE->changeSongPositionSelection(interfaceGlobals.invertValForList ? -value : value);
-            }
-            break;
+            SE->changeSelectedPlayListPattern(value);
         }
-        case 2:
+        else
         {
-            if (SE->buttons->isButtonPressed(interfaceButtonShift))
-            {
-                SE->changeGlobalTempo(0.1 * float(value));
-            }
-            else
-            {
-                SE->changeGlobalTempo(1 * float(value));
-            }
-            break;
+            SE->changeSongPositionSelection(interfaceGlobals.invertValForList ? -value : value);
         }
-        default: break;
+    }
+    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    {
+        if (SE->buttons->isButtonPressed(interfaceButtonShift))
+        {
+            SE->changeSongPositionSelection(interfaceGlobals.invertValForList ? -value : value);
+        }
+        else
+        {
+            SE->changeSelectedSongScene(value);
+        }
+    }
+    else if (SE->selectedPlace == SE->tempoPlace())
+    {
+        if (SE->buttons->isButtonPressed(interfaceButtonShift))
+        {
+            SE->changeGlobalTempo(0.1 * float(value));
+        }
+        else
+        {
+            SE->changeGlobalTempo(1 * float(value));
+        }
     }
 }
 
@@ -703,20 +735,25 @@ static void functUp()
         return;
     }
 
-    switch (SE->selectedPlace)
+    if (SE->selectedPlace == 0)
     {
-        case 0: SE->walkOnSongPlayer(playerUp); break;
-        case 1: SE->changeSongPositionSelection(-1); break;
-        case 2:
-            if (SE->buttons->isButtonPressed(interfaceButtonShift))
-            {
-                SE->changeGlobalTempo(0.1);
-            }
-            else
-            {
-                SE->changeGlobalTempo(1);
-            }
-            break;
+        SE->walkOnSongPlayer(playerUp);
+    }
+    else if (SE->selectedPlace == 1 ||
+             (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace()))
+    {
+        SE->changeSongPositionSelection(-1);
+    }
+    else if (SE->selectedPlace == SE->tempoPlace())
+    {
+        if (SE->buttons->isButtonPressed(interfaceButtonShift))
+        {
+            SE->changeGlobalTempo(0.1);
+        }
+        else
+        {
+            SE->changeGlobalTempo(1);
+        }
     }
 }
 
@@ -727,21 +764,24 @@ static void functDown()
         return;
     }
 
-    switch (SE->selectedPlace)
+    if (SE->selectedPlace == 0)
     {
-        case 0: SE->walkOnSongPlayer(playerDown); break;
-        case 1: SE->changeSongPositionSelection(1); break;
-        case 2:
+        SE->walkOnSongPlayer(playerDown);
+    }
+    else if (SE->selectedPlace == 1 ||
+             (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace()))
+    {
+        SE->changeSongPositionSelection(1);
+    }
+    else if (SE->selectedPlace == SE->tempoPlace())
+    {
+        if (SE->buttons->isButtonPressed(interfaceButtonShift))
         {
-            if (SE->buttons->isButtonPressed(interfaceButtonShift))
-            {
-                SE->changeGlobalTempo(-0.1);
-            }
-            else
-            {
-                SE->changeGlobalTempo(-1);
-            }
-            break;
+            SE->changeGlobalTempo(-0.1);
+        }
+        else
+        {
+            SE->changeGlobalTempo(-1);
         }
     }
 }
@@ -758,7 +798,12 @@ static void functLeft()
     }
     if (!SE->editMode)
     {
-        if (SE->selectedPlace == 2)
+        if (SE->selectedPlace == SE->tempoPlace())
+        {
+            SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : 1;
+            SE->activateLabelsBorder();
+        }
+        else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
         {
             SE->selectedPlace = 1;
             SE->activateLabelsBorder();
@@ -780,9 +825,13 @@ static void functLeft()
             SE->selectedPlace = 0;
         }
     }
-    else if (SE->selectedPlace == 2)
+    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
     {
         SE->selectedPlace = 1;
+    }
+    else if (SE->selectedPlace == SE->tempoPlace())
+    {
+        SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : 1;
     }
 
     SE->activateLabelsBorder();
@@ -802,7 +851,12 @@ static void functRight()
     {
         if (SE->selectedPlace == 1)
         {
-            SE->selectedPlace = 2;
+            SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : SE->tempoPlace();
+            SE->activateLabelsBorder();
+        }
+        else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+        {
+            SE->selectedPlace = SE->tempoPlace();
             SE->activateLabelsBorder();
         }
         return;
@@ -821,7 +875,11 @@ static void functRight()
     }
     else if (SE->selectedPlace == 1)
     {
-        SE->selectedPlace = 2;
+        SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : SE->tempoPlace();
+    }
+    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    {
+        SE->selectedPlace = SE->tempoPlace();
     }
 
     SE->activateLabelsBorder();
@@ -970,8 +1028,38 @@ void cSongEditor::refreshEditMode()
 //======================================================================================================================
 //==============================================================================================
 
+bool cSongEditor::hasSceneColumn() const
+{
+    return featureModules.getSongSlotBinding() != nullptr;
+}
+
+uint8_t cSongEditor::tempoPlace() const
+{
+    return hasSceneColumn() ? 3 : 2;
+}
+
+void cSongEditor::changeSelectedSongScene(int delta)
+{
+    if (!editMode || delta == 0)
+    {
+        return;
+    }
+
+    SongSlotBinding* binding = featureModules.getSongSlotBinding();
+    if (binding == nullptr)
+    {
+        return;
+    }
+
+    const int8_t step = delta > 0 ? 1 : -1;
+    binding->cycle(selectedSongPosition, step);
+    refreshSongPlayerSelectedSlot();
+}
+
 void cSongEditor::readSong()
 {
+    configureFramePlaces();
+
     uint8_t i;
     for (i = 0; i < SONG_MAX; i++)
     {
@@ -1015,6 +1103,16 @@ void cSongEditor::readSong()
     songPlayerData.midiTracksMute = mtProject.values.midiTrackMute;
     songPlayerData.isListActive = 1;
     songPlayerData.isEditMode = &editMode;
+    songPlayerData.isSceneColumnActive = 0;
+
+    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+    {
+        songPlayerData.songSlotScenes = const_cast<uint8_t*>(binding->values());
+    }
+    else
+    {
+        songPlayerData.songSlotScenes = nullptr;
+    }
 
     display.setControlData(songPlayerControl, &songPlayerData);
 }
@@ -1446,20 +1544,20 @@ static void functSwitchModeSong(uint8_t state)
 {
     if (state == buttonPress)
     {
-        if (SE->selectedPlace == 2)
+        if (SE->selectedPlace == SE->tempoPlace())
         {
             return;
         }
         SE->pressedSongButton = true;
         SE->lastSelectedPlace = SE->selectedPlace;
-        SE->selectedPlace = 2;
+        SE->selectedPlace = SE->tempoPlace();
         SE->activateLabelsBorder();
     }
     else if (state == buttonHold)
     {
         if (!SE->pressedSongButton)
         {
-            SE->selectedPlace = 2;
+            SE->selectedPlace = SE->tempoPlace();
             SE->exitOnButtonRelease = 1;
             SE->activateLabelsBorder();
         }
@@ -1660,7 +1758,15 @@ static void functDelete()
     {
         functDeleteSlot();
     }
-    else if (SE->selectedPlace == 2)
+    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    {
+        if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+        {
+            binding->assign(SE->selectedSongPosition, SongSlotBinding::kSceneNone);
+            SE->refreshSongPlayerSelectedSlot();
+        }
+    }
+    else if (SE->selectedPlace == SE->tempoPlace())
     {
         SE->setDefaultGlobalTempo();
     }

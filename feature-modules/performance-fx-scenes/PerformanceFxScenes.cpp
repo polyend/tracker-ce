@@ -102,20 +102,50 @@ bool PerformanceFxScenes::validateHeader() const
            externalRamPerfScenesBank.count == kPerfScenesCount;
 }
 
+void PerformanceFxScenes::clampSongSlotScenes()
+{
+    for (uint8_t i = 0; i < SongSlotBinding::kSongSlotCount; i++)
+    {
+        uint8_t value = externalRamPerfScenesBank.songSlotScene[i];
+        if (value > kPerfScenesCount)
+        {
+            externalRamPerfScenesBank.songSlotScene[i] = SongSlotBinding::kSceneNone;
+        }
+    }
+    externalRamPerfScenesBank.songSlotScene[SongSlotBinding::kSongSlotCount] = 0;
+}
+
 bool PerformanceFxScenes::readFile(const char* path)
 {
-    if (!ModuleSidecar::read(
+    if (ModuleSidecar::read(
           fileSystem, path, &externalRamPerfScenesBank, sizeof(externalRamPerfScenesBank)))
+    {
+        if (!validateHeader())
+        {
+            clearBank();
+            return false;
+        }
+
+        clampSongSlotScenes();
+        return true;
+    }
+
+    strPerfScenesFileV1 legacyBank;
+    if (!ModuleSidecar::read(fileSystem, path, &legacyBank, sizeof(legacyBank)))
     {
         return false;
     }
 
-    if (!validateHeader())
+    if (!(legacyBank.magic[0] == 'P' && legacyBank.magic[1] == 'F' && legacyBank.magic[2] == 'X' &&
+          legacyBank.magic[3] == 'S' && legacyBank.version == kPerfScenesFileVersionV1 &&
+          legacyBank.count == kPerfScenesCount))
     {
         clearBank();
         return false;
     }
 
+    clearBank();
+    memcpy(externalRamPerfScenesBank.scenes, legacyBank.scenes, sizeof(legacyBank.scenes));
     return true;
 }
 
@@ -127,6 +157,7 @@ void PerformanceFxScenes::writeFile(const char* path)
     externalRamPerfScenesBank.magic[3] = 'S';
     externalRamPerfScenesBank.version = kPerfScenesFileVersion;
     externalRamPerfScenesBank.count = kPerfScenesCount;
+    clampSongSlotScenes();
 
     ModuleSidecar::write(
       fileSystem, path, &externalRamPerfScenesBank, sizeof(externalRamPerfScenesBank));
@@ -176,6 +207,123 @@ bool PerformanceFxScenes::recallScene(PerformancePageHost& host, uint8_t idx)
 
     host.recallFxScene(externalRamPerfScenesBank.scenes[idx]);
     return true;
+}
+
+const uint8_t* PerformanceFxScenes::values() const
+{
+    return externalRamPerfScenesBank.songSlotScene;
+}
+
+void PerformanceFxScenes::cycle(uint8_t slot, int8_t delta)
+{
+    if (slot >= SongSlotBinding::kSongSlotCount || delta == 0)
+    {
+        return;
+    }
+
+    int16_t value = externalRamPerfScenesBank.songSlotScene[slot];
+    value += delta;
+
+    const int16_t maxValue = kPerfScenesCount;
+    while (value < 0)
+    {
+        value += maxValue + 1;
+    }
+    while (value > maxValue)
+    {
+        value -= maxValue + 1;
+    }
+
+    assign(slot, static_cast<uint8_t>(value));
+}
+
+void PerformanceFxScenes::assign(uint8_t slot, uint8_t scene)
+{
+    if (slot >= SongSlotBinding::kSongSlotCount)
+    {
+        return;
+    }
+
+    if (scene > kPerfScenesCount)
+    {
+        scene = SongSlotBinding::kSceneNone;
+    }
+
+    if (externalRamPerfScenesBank.songSlotScene[slot] == scene)
+    {
+        return;
+    }
+
+    externalRamPerfScenesBank.songSlotScene[slot] = scene;
+    saveToWorkspace();
+}
+
+void PerformanceFxScenes::onInserted(uint8_t index, bool duplicate)
+{
+    if (index >= SongSlotBinding::kSongSlotCount - 1)
+    {
+        return;
+    }
+
+    for (int i = SongSlotBinding::kSongSlotCount - 1; i > index; i--)
+    {
+        externalRamPerfScenesBank.songSlotScene[i] = externalRamPerfScenesBank.songSlotScene[i - 1];
+    }
+
+    // Playlist insert places the new row at index+1.
+    const uint8_t insertAt = static_cast<uint8_t>(index + 1);
+    if (duplicate)
+    {
+        externalRamPerfScenesBank.songSlotScene[insertAt] =
+          externalRamPerfScenesBank.songSlotScene[index];
+    }
+    else
+    {
+        externalRamPerfScenesBank.songSlotScene[insertAt] = SongSlotBinding::kSceneNone;
+    }
+
+    saveToWorkspace();
+}
+
+void PerformanceFxScenes::onRemoved(uint8_t index)
+{
+    if (index >= SongSlotBinding::kSongSlotCount)
+    {
+        return;
+    }
+
+    for (uint8_t i = index; i < SongSlotBinding::kSongSlotCount - 1; i++)
+    {
+        externalRamPerfScenesBank.songSlotScene[i] = externalRamPerfScenesBank.songSlotScene[i + 1];
+    }
+    externalRamPerfScenesBank.songSlotScene[SongSlotBinding::kSongSlotCount - 1] =
+      SongSlotBinding::kSceneNone;
+
+    saveToWorkspace();
+}
+
+void PerformanceFxScenes::clearAll()
+{
+    memset(externalRamPerfScenesBank.songSlotScene,
+           0,
+           sizeof(externalRamPerfScenesBank.songSlotScene));
+    saveToWorkspace();
+}
+
+void PerformanceFxScenes::onSlotStart(uint8_t slot)
+{
+    if (slot >= SongSlotBinding::kSongSlotCount)
+    {
+        return;
+    }
+
+    const uint8_t scene = externalRamPerfScenesBank.songSlotScene[slot];
+    if (scene == SongSlotBinding::kSceneNone || scene > kPerfScenesCount)
+    {
+        return;
+    }
+
+    recallScene(getPerformancePageHost(), static_cast<uint8_t>(scene - 1));
 }
 
 void PerformanceFxScenes::onShow(PerformancePageHost& host)
