@@ -15,6 +15,10 @@ SYNTH_DIR     := $(ROOT_DIR)/synth
 UTIL_DIR      := $(ROOT_DIR)/util
 OUT_DIR       := $(ROOT_DIR)/build
 
+# Space-separated list of external feature-module directories (other repos or local folders).
+# Each directory needs a module.mk — see feature-modules/performance-fx-scenes/ and docs/feature_module_sdk.md.
+FEATURE_MODULE_DIRS ?= $(ROOT_DIR)/feature-modules/performance-fx-scenes
+
 include $(ROOT_DIR)/version.mk
 
 ORIGINAL_POSTFIX := $(EDITION_NAME)_$(ORIGINAL_VER_MAJOR).$(ORIGINAL_VER_MINOR).$(ORIGINAL_VER_PATCH)
@@ -36,7 +40,8 @@ original:
 		TOOLCHAIN="$(TOOLCHAIN)" \
 		PLATFORM=MK66 PRODUCT=ORIGINAL \
 		POLYUTIL_DIR="$(UTIL_DIR)" \
-		POLYSYNTH_DIR="$(SYNTH_DIR)"
+		POLYSYNTH_DIR="$(SYNTH_DIR)" \
+		FEATURE_MODULE_DIRS="$(FEATURE_MODULE_DIRS)"
 	$(MAKE) -C "$(MK66_DIR)" -j$(NPROC) build \
 		TOOLCHAIN="$(TOOLCHAIN)" \
 		TRACKER_DIR="$(CORE_DIR)" \
@@ -56,7 +61,8 @@ plus:
 		TOOLCHAIN="$(TOOLCHAIN)" \
 		PLATFORM=IMX PRODUCT=PLUS \
 		POLYUTIL_DIR="$(UTIL_DIR)" \
-		POLYSYNTH_DIR="$(SYNTH_DIR)"
+		POLYSYNTH_DIR="$(SYNTH_DIR)" \
+		FEATURE_MODULE_DIRS="$(FEATURE_MODULE_DIRS)"
 	$(MAKE) -C "$(IMX_DIR)" -j$(NPROC) build \
 		TOOLCHAIN="$(TOOLCHAIN)" \
 		TRACKER_DIR="$(CORE_DIR)" \
@@ -78,7 +84,8 @@ mini:
 		TOOLCHAIN="$(TOOLCHAIN)" \
 		PLATFORM=IMX PRODUCT=MINI \
 		POLYUTIL_DIR="$(UTIL_DIR)" \
-		POLYSYNTH_DIR="$(SYNTH_DIR)"
+		POLYSYNTH_DIR="$(SYNTH_DIR)" \
+		FEATURE_MODULE_DIRS="$(FEATURE_MODULE_DIRS)"
 	$(MAKE) -C "$(IMX_DIR)" -j$(NPROC) build \
 		TOOLCHAIN="$(TOOLCHAIN)" \
 		TRACKER_DIR="$(CORE_DIR)" \

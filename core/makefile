@@ -21,6 +21,8 @@ CPP_SRCS 	+= $(shell find ./FileManager/ -name *.cpp)
 CPP_SRCS 	+= $(shell find ./Exporter/ -name *.cpp)
 CPP_SRCS 	+= $(shell find ./AudioEngine/ -name *.cpp)
 CPP_SRCS 	+= $(shell find ./synth/ -name *.cpp)
+# SDK sources only — registry is generated from FEATURE_MODULE_DIRS
+CPP_SRCS 	+= $(filter-out ./modules/registry.cpp,$(shell find ./modules/ -name *.cpp))
 C_SRCS 	 	+= $(shell find ./libs/ -name *.c)
 
 _CPP_OBJS	= $(patsubst ./%.cpp, %.o, $(CPP_SRCS))
@@ -29,11 +31,16 @@ _C_OBJS		= $(patsubst ./%.c, %.o, $(C_SRCS))
 OBJS		+= $(addprefix $(OBJ_DIR)/, $(_CPP_OBJS))
 OBJS		+= $(addprefix $(OBJ_DIR)/, $(_C_OBJS))
 
+INCLUDES=-I./include -I./config -I./source -I./synth -I./libs -I./libs/Audio -I./libs/ElapsedMillis -I./libs/SerialFlash -I./libs/SPI -I./libs/Audio/utility -I./libs/FT812 -I./libs/fonts -I./libs/NewDisplay -I./interface -I./interface/core -I./effector -I./FileManager -I./Exporter -I./AudioEngine -I./modules -I./libs/Audio/Polyverb -I./AudioEngine/ConstantValues -I./AudioEngine/MasterEnhancer -I${POLYUTIL_DIR}/include -I${POLYUTIL_DIR}/3rdparty -I${POLYSYNTH_DIR}/include  
+
+# External feature modules (directories outside core/, possibly other repos)
+include modules/external_modules.mk
+OBJS		+= $(FEATURE_MODULE_OBJS)
+OBJS		+= $(GENERATED_FEATURE_MODULE_REGISTRY_OBJ)
+
 OBJS_SORTED := $(sort $(OBJS))
 OBJ_DIRS	:= $(dir $(OBJS_SORTED))
 DEPS		:= $(OBJS_SORTED:.o=.d)
-
-INCLUDES=-I./include -I./config -I./source -I./synth -I./libs -I./libs/Audio -I./libs/ElapsedMillis -I./libs/SerialFlash -I./libs/SPI -I./libs/Audio/utility -I./libs/FT812 -I./libs/fonts -I./libs/NewDisplay -I./interface -I./effector -I./FileManager -I./Exporter -I./AudioEngine -I./libs/Audio/Polyverb -I./AudioEngine/ConstantValues -I./AudioEngine/MasterEnhancer -I${POLYUTIL_DIR}/include -I${POLYUTIL_DIR}/3rdparty -I${POLYSYNTH_DIR}/include  
 COMPILER_OPTIONS=-MMD -MP -fno-common -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -fstack-usage -specs=nano.specs -Wall -Wextra -c -ffunction-sections -fdata-sections -ffreestanding -fno-builtin 
 ifdef DEBUG
 COMPILER_OPTIONS+=-Og -DDEBUG
@@ -90,7 +97,7 @@ build:
 
 main-build: $(TARGET)
 
-pre-build:
+pre-build: $(GENERATED_FEATURE_MODULE_REGISTRY)
 	$(foreach dir,$(sort $(OBJ_DIRS)),mkdir -p $(dir);)
 post-build: 
 

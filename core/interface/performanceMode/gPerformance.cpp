@@ -1,5 +1,5 @@
+#include "FeatureModuleRegistry.h"
 #include "mtSequencer.h"
-#include "perfScenes.h"
 #include "performanceEngine.h"
 #include "performanceMode.h"
 
@@ -357,59 +357,45 @@ void cPerformanceMode::colorTracksLabel(uint8_t button, uint8_t state)
 }
 
 //##############################################################################################
-//###############################        MUTE BUTTONS          #################################
+//###############################     PERFORMANCE MODULE PAGES   ###############################
 //##############################################################################################
-void cPerformanceMode::showScenesPage()
+void cPerformanceMode::showPerformancePage(PerformancePage* page)
 {
-    static const char* const sceneSlotLabels[kPerfScenesCount] = {
-        "1", "2", "3", "4", "5", "6", "7", "8"
-    };
-
-    titleBar->show();
-    titleBar->setTitle("Scenes");
-
-    for (uint8_t i = 0; i < kPerfScenesCount; i++)
+    if (page == nullptr)
     {
-        const uint32_t* colors = perfScenes.isFilled(i)
-                                   ? display.getTheme().performActiveTrackLabelsColors
-                                   : display.getTheme().inactiveLabelsColors;
-
-        display.setControlColors(label[i], colors);
-        display.setControlText(label[i], sceneSlotLabels[i]);
-        display.setControlText2(label[i], (char*)"");
-        display.setControlStyle(label[i],
-                                controlStyleCenterX | controlStyleCenterY | controlStyleFont3);
-        display.setControlShow(label[i]);
-        display.refreshControl(label[i]);
+        return;
     }
 
-    display.synchronizeRefresh();
+    activePerformancePage = page;
+    page->onShow(getPerformancePageHost());
 }
 
-void cPerformanceMode::hideScenesPage()
+void cPerformanceMode::hidePerformancePage()
 {
-    scenesPageActive = 0;
-    titleBar->setTitle("Performance FX");
-    showTracksPatterns();
-    showTracksState(buttons->isButtonPressed(interfaceButtonShift));
+    if (activePerformancePage == nullptr)
+    {
+        return;
+    }
+
+    PerformancePage* page = activePerformancePage;
+    activePerformancePage = nullptr;
+    page->onHide(getPerformancePageHost());
 }
 
-void cPerformanceMode::toggleScenesPage()
+void cPerformanceMode::togglePerformancePage()
 {
-    if (scenesPageActive)
+    if (activePerformancePage != nullptr)
     {
-        hideScenesPage();
+        hidePerformancePage();
+        return;
     }
-    else
-    {
-        scenesPageActive = 1;
-        showScenesPage();
-    }
+
+    showPerformancePage(featureModules.getPerformancePage(0));
 }
 
 void cPerformanceMode::showMuteButtons(uint8_t state)
 {
-    if (scenesPageActive)
+    if (activePerformancePage != nullptr)
     {
         return;
     }

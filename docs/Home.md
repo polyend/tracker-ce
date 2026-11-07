@@ -27,6 +27,8 @@ Welcome to the official documentation for **Polyend Tracker Community Edition (C
   * Step-by-step C++20 developer tutorial and API reference (`synth/include/PolySynth/sdk/`) for building and registering new polyphonic synthesizer engines on **Tracker+** and **Tracker Mini**, including a walkthrough of the open-source **`CHIP`** (`ChiptuneSynthVoice`) engine.
 * **[Modular Sample Editor Effects & `.ptfx` Developer SDK (`docs/modular_effects_system.md`)](modular_effects_system.md)**
   * Complete C/C++ developer guide (`editor-fx-sdk/`), parameter/host API reference, 472-byte `PtfxHeader` binary spec, and firmware cache/buffer architecture for `.ptfx` Sample Editor effects and generators across all 3 Tracker devices.
+* **[Feature Module SDK (`docs/feature_module_sdk.md`)](feature_module_sdk.md)**
+  * Compile-time C++ modules (`core/modules/`) for project sidecar files and optional Performance Mode pages, with Performance FX Scenes as the reference implementation.
 * **[Repository README - Build Instructions & PR Guidelines (`README.md`)](../README.md)**
   * Top-level build instructions, flashing steps, project philosophy, and contribution rules.
 

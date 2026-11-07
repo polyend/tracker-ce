@@ -43,8 +43,10 @@ See [`CHANGELOG.md`](CHANGELOG.md) for the full list of new features and improve
 │   └── lib/                # Precompiled libPolySynth.a & libPolyDSP.a + LICENSE-PROPRIETARY.txt
 ├── util/                   # Shared C++ utility headers & third-party header libraries (ETL, magic_enum)
 ├── editor-fx-sdk/          # .ptfx Sample Editor plugin SDK, builder & effects/ sources
+├── feature-modules/        # External Feature Module SDK examples (e.g. Performance FX Scenes)
 └── docs/                   # User guides, SDK tutorials & architecture documentation
 ```
+
 
 ---
 
@@ -140,6 +142,7 @@ Full user and developer documentation is available in [`docs/`](docs/Home.md) an
   * [Firmware Architecture, Hardware Limits & Developer Gotchas](docs/developer_guide.md)
   * [Custom Synth Engine SDK](docs/custom_synth_sdk.md)
   * [Modular Sample Editor Effects & `.ptfx` Developer SDK](docs/modular_effects_system.md)
+  * [Feature Module SDK](docs/feature_module_sdk.md)
 
 ---
 

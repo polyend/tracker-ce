@@ -1,3 +1,4 @@
+#include "FeatureModuleRegistry.h"
 #include "Platform.h"
 #include "Profiler.h"
 #include "TrackerImpl.h"
@@ -163,6 +164,7 @@ void TrackerImpl::update()
     exporter.update();
     sliceDetector.update();
     newFileManager.update();
+    featureModules.updateAll();
     mtInterface.update();
     engine.updateSdStream();
     sequencer.update();

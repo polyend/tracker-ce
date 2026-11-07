@@ -9,8 +9,8 @@
 
 #include "performanceMode.h"
 
+#include "FeatureModuleRegistry.h"
 #include "Platform.h"
-#include "perfScenes.h"
 #include "performanceEngine.h"
 #include "util_math.h"
 
@@ -37,7 +37,7 @@ static void functSwitchModule(uint8_t button);
 static void functSwitchTracksPage();
 
 static void functActionButton(uint8_t button, uint8_t state);
-static void functSceneButton(uint8_t button, uint8_t state);
+static void functPerformancePageButton(uint8_t button, uint8_t state);
 
 static void functPads(uint8_t pad, uint8_t state, int16_t velo);
 
@@ -45,8 +45,7 @@ static void functMenu(uint8_t state);
 static void functMiniMiddle(uint8_t state);
 
 static void bindTrackActionButtons();
-static void bindSceneActionButtons();
-static void refreshSceneRackDisplay();
+static void bindPerformancePageButtons();
 
 static bool changeInstantlyTracksOnSelected(int8_t delta);
 static bool changeSequentiallyTracksOnSelected(int8_t delta);
@@ -68,7 +67,7 @@ void cPerformanceMode::update()
         return;
     refreshTime = 0;
 
-    if (scenesPageActive)
+    if (activePerformancePage != nullptr)
     {
         return;
     }
@@ -139,7 +138,7 @@ void cPerformanceMode::start(uint32_t options)
     performance.setEditState(performanceEditState);
     refreshBlinkingTrack = 0;
     dontClearPerformanceMode = 0;
-    scenesPageActive = 0;
+    activePerformancePage = nullptr;
 
     // ustawienie funkcji
     ip->setButtonObj(interfaceButtonPerformance, buttonPress, functSwitchTracksPage);
@@ -196,27 +195,16 @@ static void bindTrackActionButtons()
     ModuleBase::ip->setButtonObj(interfaceButton7, functActionButton);
 }
 
-static void bindSceneActionButtons()
+static void bindPerformancePageButtons()
 {
-    ModuleBase::ip->setButtonObj(interfaceButton0, functSceneButton);
-    ModuleBase::ip->setButtonObj(interfaceButton1, functSceneButton);
-    ModuleBase::ip->setButtonObj(interfaceButton2, functSceneButton);
-    ModuleBase::ip->setButtonObj(interfaceButton3, functSceneButton);
-    ModuleBase::ip->setButtonObj(interfaceButton4, functSceneButton);
-    ModuleBase::ip->setButtonObj(interfaceButton5, functSceneButton);
-    ModuleBase::ip->setButtonObj(interfaceButton6, functSceneButton);
-    ModuleBase::ip->setButtonObj(interfaceButton7, functSceneButton);
-}
-
-static void refreshSceneRackDisplay()
-{
-    for (uint8_t place = 0; place < 12; place++)
-    {
-        PM->showFxNames(place);
-        PM->showPerformaceValue(place);
-    }
-    PM->lightUpPadBoard();
-    display.synchronizeRefresh();
+    ModuleBase::ip->setButtonObj(interfaceButton0, functPerformancePageButton);
+    ModuleBase::ip->setButtonObj(interfaceButton1, functPerformancePageButton);
+    ModuleBase::ip->setButtonObj(interfaceButton2, functPerformancePageButton);
+    ModuleBase::ip->setButtonObj(interfaceButton3, functPerformancePageButton);
+    ModuleBase::ip->setButtonObj(interfaceButton4, functPerformancePageButton);
+    ModuleBase::ip->setButtonObj(interfaceButton5, functPerformancePageButton);
+    ModuleBase::ip->setButtonObj(interfaceButton6, functPerformancePageButton);
+    ModuleBase::ip->setButtonObj(interfaceButton7, functPerformancePageButton);
 }
 
 void cPerformanceMode::setDefaultScreenFunct()
@@ -646,7 +634,7 @@ static void functRecAction()
 
 static void functShift(uint8_t value)
 {
-    if (PM->scenesPageActive)
+    if (PM->isPerformancePageActive())
     {
         return;
     }
@@ -705,32 +693,31 @@ static void functSwitchModule(uint8_t button)
 static void functSwitchTracksPage()
 {
 #ifdef TRACKER_MINI
-    if (PM->scenesPageActive)
+    if (PM->isPerformancePageActive())
     {
-        PM->hideScenesPage();
+        PM->hidePerformancePage();
         bindTrackActionButtons();
         return;
     }
 #else
     if (PM->buttons->isButtonPressed(interfaceButtonShift))
     {
-        if (PM->scenesPageActive)
+        if (PM->isPerformancePageActive())
         {
-            PM->hideScenesPage();
+            PM->hidePerformancePage();
             bindTrackActionButtons();
         }
-        else
+        else if (featureModules.getPerformancePage(0) != nullptr)
         {
-            PM->scenesPageActive = 1;
-            bindSceneActionButtons();
-            PM->showScenesPage();
+            bindPerformancePageButtons();
+            PM->showPerformancePage(featureModules.getPerformancePage(0));
         }
         return;
     }
 
-    if (PM->scenesPageActive)
+    if (PM->isPerformancePageActive())
     {
-        PM->hideScenesPage();
+        PM->hidePerformancePage();
         bindTrackActionButtons();
         return;
     }
@@ -758,27 +745,15 @@ static void functSwitchTracksPage()
     }
 }
 
-static void functSceneButton(uint8_t button, uint8_t state)
+static void functPerformancePageButton(uint8_t button, uint8_t state)
 {
-    if (state != buttonPress || button >= kPerfScenesCount)
+    PerformancePage* page = PM->getActivePerformancePage();
+    if (page == nullptr)
     {
         return;
     }
 
-    if (PM->buttons->isButtonPressed(interfaceButtonShift))
-    {
-        char name[kPerfSceneNameLength];
-        snprintf(name, sizeof(name), "Scene %d", button + 1);
-        perfScenes.storeScene(button, name);
-        PM->showScenesPage();
-    }
-    else
-    {
-        if (perfScenes.recallScene(button))
-        {
-            refreshSceneRackDisplay();
-        }
-    }
+    page->onScreenButton(getPerformancePageHost(), button, state);
 }
 
 //##############################################################################################
@@ -1023,16 +998,15 @@ static void functMiniMiddle(uint8_t state)
 #ifdef TRACKER_MINI
     if (state == buttonPress)
     {
-        if (PM->scenesPageActive)
+        if (PM->isPerformancePageActive())
         {
-            PM->hideScenesPage();
+            PM->hidePerformancePage();
             bindTrackActionButtons();
         }
-        else
+        else if (featureModules.getPerformancePage(0) != nullptr)
         {
-            PM->scenesPageActive = 1;
-            bindSceneActionButtons();
-            PM->showScenesPage();
+            bindPerformancePageButtons();
+            PM->showPerformancePage(featureModules.getPerformancePage(0));
         }
     }
 #else

@@ -1,6 +1,7 @@
 #ifndef INTERFACE_PERFORMANCEMODE_H_
 #define INTERFACE_PERFORMANCEMODE_H_
 
+#include "FeatureModule.h"
 #include "core/modulesBase.h"
 
 #include "mtStructs.h"
@@ -111,10 +112,11 @@ class cPerformanceMode : public ModuleBase
     void showFxNames(uint8_t place);
     void hideFxNames();
 
-    void toggleScenesPage();
-    void showScenesPage();
-    void hideScenesPage();
-    bool isScenesPageActive() const { return scenesPageActive; }
+    void togglePerformancePage();
+    void showPerformancePage(PerformancePage* page);
+    void hidePerformancePage();
+    bool isPerformancePageActive() const { return activePerformancePage != nullptr; }
+    PerformancePage* getActivePerformancePage() const { return activePerformancePage; }
     //----------------------------------
 
     void setFxValue(int value);
@@ -151,7 +153,7 @@ class cPerformanceMode : public ModuleBase
     uint8_t performanceEditState = 0;
     uint8_t performanceEditPlace = 0;
     uint8_t tracksPage = 0;
-    uint8_t scenesPageActive = 0;
+    PerformancePage* activePerformancePage = nullptr;
 
     uint8_t dontClearPerformanceMode = 0;
 

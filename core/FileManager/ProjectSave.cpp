@@ -4,7 +4,7 @@
 #include "fileManager.h"
 #include "fileManagerDefs.h"
 #include "fileTransfer.h"
-#include "performanceMode/perfScenes.h"
+#include "FeatureModuleRegistry.h"
 
 #if FILEMANAGER_HANDLE_SYNTH == 1
 #include "Synth.h"
@@ -522,9 +522,9 @@ void ProjectSave::saveProjectFinish()
 
     newFileManager.getPatternsMetadata()->copyPatternsMetadata(cWorkspacePatternsMetadataFilePath,
                                                                destFilePath);
-    //------------ performance FX scenes
-    perfScenes.copyWorkspaceToProject(newFileManager.getCurrentProjectPath(),
-                                      newFileManager.getCurrentProjectName());
+    //------------ feature module sidecars
+    featureModules.onProjectSave(newFileManager.getCurrentProjectPath(),
+                                 newFileManager.getCurrentProjectName());
     //------------ synth patches
 
 #if FILEMANAGER_HANDLE_SYNTH == 1
