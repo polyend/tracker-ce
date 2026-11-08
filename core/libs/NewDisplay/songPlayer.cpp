@@ -238,7 +238,7 @@ void cSongPlayer::showList()
     int16_t width = 210;
     int16_t posX = (this->posX + this->width) - width;
     int16_t height = this->height - 30;
-    const int16_t sceneX = posX + width - 22;
+    const int16_t columnX = posX + width - 22;
 
     int16_t x_pos = posX, y_pos, h_row = 27; // font->height+8;
     uint16_t w_bar = width - 6;              // szerokosc ramki
@@ -334,7 +334,7 @@ void cSongPlayer::showList()
             drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
             if (hasListColumn)
             {
-                drawListColumnCell(i + textListPos, sceneX, y_pos + (i * h_row));
+                drawListColumnCell(i + textListPos, columnX, y_pos + (i * h_row));
             }
         }
 
@@ -511,7 +511,7 @@ void cSongPlayer::showList()
                     drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
                     if (hasListColumn)
                     {
-                        drawListColumnCell(i + textListPos, sceneX, y_pos + (i * h_row));
+                        drawListColumnCell(i + textListPos, columnX, y_pos + (i * h_row));
                     }
                 }
             }
@@ -551,7 +551,7 @@ void cSongPlayer::showList()
                     drawIcon(i + table_offset, i, x_pos, y_pos, h_row);
                     if (hasListColumn)
                     {
-                        drawListColumnCell(i + table_offset, sceneX, y_pos + (i * h_row));
+                        drawListColumnCell(i + table_offset, columnX, y_pos + (i * h_row));
                     }
                 }
             }
@@ -587,7 +587,7 @@ void cSongPlayer::showList()
                 drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
                 if (hasListColumn)
                 {
-                    drawListColumnCell(i + textListPos, sceneX, y_pos + (i * h_row));
+                    drawListColumnCell(i + textListPos, columnX, y_pos + (i * h_row));
                 }
             }
         }

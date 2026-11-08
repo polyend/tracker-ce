@@ -68,6 +68,8 @@ class PerformancePageHost
 
     virtual void restoreTrackLabels() = 0;
     virtual void refreshFxRack() = 0;
+    // True when Performance Mode is showing the FX rack (not a module page).
+    virtual bool isShowingFxRack() const = 0;
 
     virtual bool isShiftPressed() const = 0;
 

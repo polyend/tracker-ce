@@ -1,5 +1,4 @@
 #include "FeatureModuleRegistry.h"
-#include "PerformanceHost.h"
 #include "Platform.h"
 #include "Profiler.h"
 #include "TrackerImpl.h"
@@ -17,7 +16,6 @@
 #include "mtSleep.h"
 #include "mtSliceDetector.h"
 #include "mtStructs.h"
-#include "performanceMode/performanceMode.h"
 
 #include <cr_section_macros.h>
 
@@ -169,7 +167,7 @@ void TrackerImpl::update()
     newFileManager.update();
     featureModules.updateAll();
 
-    // Recall Performance FX scenes assigned to song rows on the main thread.
+    // Dispatch song-list column slot starts on the main thread.
     // playlistPos is updated from the audio path; latch changes here.
     {
         static bool wasPlayingSong = false;
@@ -186,12 +184,6 @@ void TrackerImpl::update()
             {
                 lastRecalledSongSlot = songSlot;
                 column->onSlotStart(songSlot);
-
-                if (mtInterface.isPerformanceModeScreenActive() &&
-                    !performanceMode.isPerformancePageActive())
-                {
-                    getPerformancePageHost().refreshFxRack();
-                }
             }
             wasPlayingSong = true;
         }

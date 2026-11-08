@@ -346,7 +346,16 @@ void PerformanceFxScenes::onSlotStart(uint8_t slot)
         return;
     }
 
-    recallScene(getPerformancePageHost(), static_cast<uint8_t>(scene - 1));
+    PerformancePageHost& host = getPerformancePageHost();
+    if (!recallScene(host, static_cast<uint8_t>(scene - 1)))
+    {
+        return;
+    }
+
+    if (host.isShowingFxRack())
+    {
+        host.refreshFxRack();
+    }
 }
 
 void PerformanceFxScenes::onShow(PerformancePageHost& host)

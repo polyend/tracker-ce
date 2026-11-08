@@ -1,5 +1,6 @@
 #include "PerformanceHost.h"
 
+#include "core/interface.h"
 #include "core/interfaceDefs.h"
 #include "display.h"
 #include "fileManager.h"
@@ -59,6 +60,12 @@ class PerformancePageHostImpl : public PerformancePageHost
         }
         performanceMode.lightUpPadBoard();
         display.synchronizeRefresh();
+    }
+
+    bool isShowingFxRack() const override
+    {
+        return mtInterface.isPerformanceModeScreenActive() &&
+               !performanceMode.isPerformancePageActive();
     }
 
     bool isShiftPressed() const override

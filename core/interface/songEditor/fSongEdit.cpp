@@ -500,9 +500,9 @@ static void functAddSlot()
     mtProject.song.playlist[SE->selectedSongPosition + 1] =
       duplicateSlot ? mtProject.song.playlist[SE->selectedSongPosition] : firstEmptyPatternIdx;
 
-    if (SongListColumn* binding = featureModules.getSongListColumn())
+    if (SongListColumn* column = featureModules.getSongListColumn())
     {
-        binding->onInserted(SE->selectedSongPosition, duplicateSlot);
+        column->onInserted(SE->selectedSongPosition, duplicateSlot);
     }
 
     SE->songLength++;
@@ -547,9 +547,9 @@ static void functDeleteSlot()
         mtProject.song.playlist[i] = mtProject.song.playlist[i + 1];
     }
 
-    if (SongListColumn* binding = featureModules.getSongListColumn())
+    if (SongListColumn* column = featureModules.getSongListColumn())
     {
-        binding->onRemoved(SE->selectedSongPosition);
+        column->onRemoved(SE->selectedSongPosition);
     }
 
     SE->songLength--;

@@ -146,7 +146,7 @@ class ScreenExtension
 | `focusEncoderLabel()` | Pattern +/- label while the column is focused |
 | `onEncoder` / `onClear` | Edit mode input |
 | `onInserted` / `onRemoved` / `clearAll` | Stay aligned with Add/Delete Slot and MOD/IT import |
-| `onSlotStart` | Main-thread recall when song playback enters a row |
+| `onSlotStart` | Main-thread hook when song playback enters a row (module owns recall + any UI refresh) |
 
 `FeatureModuleRegistry::getSongListColumn()` returns the first Song `ScreenExtension` that exposes a column. `SongListColumn::kSongSlotCount` must match `SONG_MAX` (255).
 
@@ -188,7 +188,7 @@ class PerformancePage
 `PerformancePageHost` (implemented by firmware) is the only UI/engine API a page should call:
 
 * `setPageTitle`, `setScreenLabel`, `finishScreenLabels`
-* `restoreTrackLabels`, `refreshFxRack`
+* `restoreTrackLabels`, `refreshFxRack`, `isShowingFxRack`
 * `isShiftPressed`
 * `captureFxScene` / `recallFxScene` (`strPerfScene` — 12 FX slots)
 * `capturePatternScene` / `recallPatternScene` (`strPatternScene` — per-track pattern cues)
