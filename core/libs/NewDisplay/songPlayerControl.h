@@ -55,9 +55,11 @@ typedef struct
     progress_control_t progress;
     localList_t* list;
 
-    // Optional per-row scene assignments (0 = none, 1..8 = scene). Null when unused.
-    uint8_t* songSlotScenes = nullptr;
-    uint8_t isSceneColumnActive = 0;
+    // Optional list-column extension (feature module). Null header/formatter = no column.
+    const char* listColumnHeader = nullptr;
+    void* listColumnCtx = nullptr;
+    void (*formatListColumnCell)(void* ctx, uint8_t slot, char* out, uint8_t outSize) = nullptr;
+    uint8_t isListColumnActive = 0;
 
     uint8_t normalTracksCount;
     uint8_t midiTracksCount;
@@ -104,7 +106,7 @@ class cSongPlayer : public cDisplayControl
     void showList();
     void drawTrackNames();
     void drawIcon(int pos, int row, int x, int y, int h);
-    void drawSceneValue(int slotIndex, int16_t x, int16_t y);
+    void drawListColumnCell(int slotIndex, int16_t x, int16_t y);
     void fillBlocks();
     void drawProgressLine();
     void calculateSelection(uint8_t pattern,

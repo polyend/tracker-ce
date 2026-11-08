@@ -8,14 +8,15 @@
 #include "performanceMode/performanceMode.h"
 
 #include "FeatureModuleRegistry.h"
+#include "ScreenHost.h"
 #include "Platform.h"
 #include "mtPadBoard.h"
 #include "mtPadsBacklight.h"
 #include "mtStructs.h"
 #include "util_math.h"
 
-static_assert(SongSlotBinding::kSongSlotCount == SONG_MAX,
-              "SongSlotBinding::kSongSlotCount must match SONG_MAX");
+static_assert(SongListColumn::kSongSlotCount == SONG_MAX,
+              "SongListColumn::kSongSlotCount must match SONG_MAX");
 
 cSongEditor songEditor;
 
@@ -383,9 +384,9 @@ static void functIncPattern(uint8_t state)
         return;
     }
 
-    if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
     {
-        SE->changeSelectedSongScene(1);
+        SE->changeSelectedListColumn(1);
         SE->activateLabelsBorder();
         return;
     }
@@ -422,9 +423,9 @@ static void functDecPattern(uint8_t state)
         return;
     }
 
-    if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
     {
-        SE->changeSelectedSongScene(-1);
+        SE->changeSelectedListColumn(-1);
         SE->activateLabelsBorder();
         return;
     }
@@ -499,7 +500,7 @@ static void functAddSlot()
     mtProject.song.playlist[SE->selectedSongPosition + 1] =
       duplicateSlot ? mtProject.song.playlist[SE->selectedSongPosition] : firstEmptyPatternIdx;
 
-    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+    if (SongListColumn* binding = featureModules.getSongListColumn())
     {
         binding->onInserted(SE->selectedSongPosition, duplicateSlot);
     }
@@ -546,7 +547,7 @@ static void functDeleteSlot()
         mtProject.song.playlist[i] = mtProject.song.playlist[i + 1];
     }
 
-    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+    if (SongListColumn* binding = featureModules.getSongListColumn())
     {
         binding->onRemoved(SE->selectedSongPosition);
     }
@@ -692,7 +693,7 @@ static void functEncoder(int16_t value)
             SE->changeSongPositionSelection(interfaceGlobals.invertValForList ? -value : value);
         }
     }
-    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
     {
         if (SE->buttons->isButtonPressed(interfaceButtonShift))
         {
@@ -700,7 +701,7 @@ static void functEncoder(int16_t value)
         }
         else
         {
-            SE->changeSelectedSongScene(value);
+            SE->changeSelectedListColumn(value);
         }
     }
     else if (SE->selectedPlace == SE->tempoPlace())
@@ -740,7 +741,7 @@ static void functUp()
         SE->walkOnSongPlayer(playerUp);
     }
     else if (SE->selectedPlace == 1 ||
-             (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace()))
+             (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace()))
     {
         SE->changeSongPositionSelection(-1);
     }
@@ -769,7 +770,7 @@ static void functDown()
         SE->walkOnSongPlayer(playerDown);
     }
     else if (SE->selectedPlace == 1 ||
-             (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace()))
+             (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace()))
     {
         SE->changeSongPositionSelection(1);
     }
@@ -800,10 +801,10 @@ static void functLeft()
     {
         if (SE->selectedPlace == SE->tempoPlace())
         {
-            SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : 1;
+            SE->selectedPlace = SE->hasListColumn() ? SE->listColumnPlace() : 1;
             SE->activateLabelsBorder();
         }
-        else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+        else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
         {
             SE->selectedPlace = 1;
             SE->activateLabelsBorder();
@@ -825,13 +826,13 @@ static void functLeft()
             SE->selectedPlace = 0;
         }
     }
-    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
     {
         SE->selectedPlace = 1;
     }
     else if (SE->selectedPlace == SE->tempoPlace())
     {
-        SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : 1;
+        SE->selectedPlace = SE->hasListColumn() ? SE->listColumnPlace() : 1;
     }
 
     SE->activateLabelsBorder();
@@ -851,10 +852,10 @@ static void functRight()
     {
         if (SE->selectedPlace == 1)
         {
-            SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : SE->tempoPlace();
+            SE->selectedPlace = SE->hasListColumn() ? SE->listColumnPlace() : SE->tempoPlace();
             SE->activateLabelsBorder();
         }
-        else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+        else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
         {
             SE->selectedPlace = SE->tempoPlace();
             SE->activateLabelsBorder();
@@ -875,9 +876,9 @@ static void functRight()
     }
     else if (SE->selectedPlace == 1)
     {
-        SE->selectedPlace = SE->hasSceneColumn() ? SE->scenePlace() : SE->tempoPlace();
+        SE->selectedPlace = SE->hasListColumn() ? SE->listColumnPlace() : SE->tempoPlace();
     }
-    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
     {
         SE->selectedPlace = SE->tempoPlace();
     }
@@ -1028,32 +1029,61 @@ void cSongEditor::refreshEditMode()
 //======================================================================================================================
 //==============================================================================================
 
-bool cSongEditor::hasSceneColumn() const
+bool cSongEditor::hasListColumn() const
 {
-    return featureModules.getSongSlotBinding() != nullptr;
+    return featureModules.getSongListColumn() != nullptr;
 }
 
 uint8_t cSongEditor::tempoPlace() const
 {
-    return hasSceneColumn() ? 3 : 2;
+    return hasListColumn() ? 3 : 2;
 }
 
-void cSongEditor::changeSelectedSongScene(int delta)
+void cSongEditor::changeSelectedListColumn(int delta)
 {
     if (!editMode || delta == 0)
     {
         return;
     }
 
-    SongSlotBinding* binding = featureModules.getSongSlotBinding();
-    if (binding == nullptr)
+    SongListColumn* column = featureModules.getSongListColumn();
+    if (column == nullptr)
     {
         return;
     }
 
     const int8_t step = delta > 0 ? 1 : -1;
-    binding->cycle(selectedSongPosition, step);
+    column->onEncoder(getSongScreenHost(), selectedSongPosition, step);
     refreshSongPlayerSelectedSlot();
+}
+
+static void formatSongListColumnCell(void* ctx, uint8_t slot, char* out, uint8_t outSize)
+{
+    if (ctx == nullptr)
+    {
+        if (out != nullptr && outSize > 0)
+        {
+            out[0] = '\0';
+        }
+        return;
+    }
+
+    static_cast<SongListColumn*>(ctx)->formatCell(slot, out, outSize);
+}
+
+void cSongEditor::wireListColumnDrawData()
+{
+    songPlayerData.isListColumnActive = 0;
+    songPlayerData.listColumnHeader = nullptr;
+    songPlayerData.listColumnCtx = nullptr;
+    songPlayerData.formatListColumnCell = nullptr;
+
+    if (SongListColumn* column = featureModules.getSongListColumn())
+    {
+        songPlayerData.listColumnHeader = column->header();
+        songPlayerData.listColumnCtx = column;
+        songPlayerData.formatListColumnCell = formatSongListColumnCell;
+    }
 }
 
 void cSongEditor::readSong()
@@ -1103,16 +1133,7 @@ void cSongEditor::readSong()
     songPlayerData.midiTracksMute = mtProject.values.midiTrackMute;
     songPlayerData.isListActive = 1;
     songPlayerData.isEditMode = &editMode;
-    songPlayerData.isSceneColumnActive = 0;
-
-    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
-    {
-        songPlayerData.songSlotScenes = const_cast<uint8_t*>(binding->values());
-    }
-    else
-    {
-        songPlayerData.songSlotScenes = nullptr;
-    }
+    wireListColumnDrawData();
 
     display.setControlData(songPlayerControl, &songPlayerData);
 }
@@ -1758,11 +1779,11 @@ static void functDelete()
     {
         functDeleteSlot();
     }
-    else if (SE->hasSceneColumn() && SE->selectedPlace == SE->scenePlace())
+    else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
     {
-        if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+        if (SongListColumn* column = featureModules.getSongListColumn())
         {
-            binding->assign(SE->selectedSongPosition, SongSlotBinding::kSceneNone);
+            column->onClear(getSongScreenHost(), SE->selectedSongPosition);
             SE->refreshSongPlayerSelectedSlot();
         }
     }

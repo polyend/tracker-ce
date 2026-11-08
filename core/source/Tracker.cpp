@@ -175,17 +175,17 @@ void TrackerImpl::update()
         static bool wasPlayingSong = false;
         static int16_t lastRecalledSongSlot = -1;
 
-        SongSlotBinding* binding = featureModules.getSongSlotBinding();
+        SongListColumn* column = featureModules.getSongListColumn();
         // Performance Mode reports SEQ_STATE_PLAY_PERFORMANCE even while songMode is on.
         const bool playingSong = sequencer.isPlay() && sequencer.isSongMode();
 
-        if (binding != nullptr && playingSong)
+        if (column != nullptr && playingSong)
         {
             const uint8_t songSlot = mtProject.song.playlistPos;
             if (!wasPlayingSong || lastRecalledSongSlot != static_cast<int16_t>(songSlot))
             {
                 lastRecalledSongSlot = songSlot;
-                binding->onSlotStart(songSlot);
+                column->onSlotStart(songSlot);
 
                 if (mtInterface.isPerformanceModeScreenActive() &&
                     !performanceMode.isPerformancePageActive())

@@ -419,9 +419,9 @@ void cFileManager::importModFile_Patterns()
     {
         mtProject.song.playlist[a] = modSong.playlist[a] + 1;
     }
-    if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+    if (SongListColumn* column = featureModules.getSongListColumn())
     {
-        binding->clearAll();
+        column->clearAll();
     }
 
     // mod narzuca length 64

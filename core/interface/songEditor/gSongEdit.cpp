@@ -5,13 +5,13 @@
 #include "mtSequencer.h"
 #include "string.h"
 
-static const uint16_t framesPlacesNoScene[3][4] = {
+static const uint16_t framesPlacesNoColumn[3][4] = {
     { (800 / 8) * 0 + 1, 31, 500 - 3, 391 },
     { (800 / 8) * 5 + 1, 31, 800 / 4 - 3, 391 },
     { (800 / 8) * 7 + 1, 31, 800 / 8 - 3, 391 },
 };
 
-static const uint16_t framesPlacesWithScene[4][4] = {
+static const uint16_t framesPlacesWithColumn[4][4] = {
     { (800 / 8) * 0 + 1, 31, 500 - 3, 391 },
     { (800 / 8) * 5 + 1, 31, 155, 391 },
     { 656, 31, 42, 391 },
@@ -20,22 +20,22 @@ static const uint16_t framesPlacesWithScene[4][4] = {
 
 void cSongEditor::configureFramePlaces()
 {
-    if (hasSceneColumn())
+    if (hasListColumn())
     {
         frameData.placesCount = 4;
         frameData.startPlace = 3;
-        frameData.places[0] = &framesPlacesWithScene[0][0];
-        frameData.places[1] = &framesPlacesWithScene[1][0];
-        frameData.places[2] = &framesPlacesWithScene[2][0];
-        frameData.places[3] = &framesPlacesWithScene[3][0];
+        frameData.places[0] = &framesPlacesWithColumn[0][0];
+        frameData.places[1] = &framesPlacesWithColumn[1][0];
+        frameData.places[2] = &framesPlacesWithColumn[2][0];
+        frameData.places[3] = &framesPlacesWithColumn[3][0];
     }
     else
     {
         frameData.placesCount = 3;
         frameData.startPlace = 2;
-        frameData.places[0] = &framesPlacesNoScene[0][0];
-        frameData.places[1] = &framesPlacesNoScene[1][0];
-        frameData.places[2] = &framesPlacesNoScene[2][0];
+        frameData.places[0] = &framesPlacesNoColumn[0][0];
+        frameData.places[1] = &framesPlacesNoColumn[1][0];
+        frameData.places[2] = &framesPlacesNoColumn[2][0];
         frameData.places[3] = nullptr;
     }
 }
@@ -207,7 +207,7 @@ void cSongEditor::showDefaultScreen()
     display.setControlText(label[4], "Delete");
     display.setControlText2(label[4], "Slot");
 
-    refreshPatternSceneButtonLabels();
+    refreshListColumnButtonLabels();
 
     display.setControlText(label[6], "");
     display.setControlText2(label[6], "");
@@ -370,18 +370,23 @@ void cSongEditor::refreshButtonsLabels()
 
 //==============================================================================================================
 
-void cSongEditor::refreshPatternSceneButtonLabels()
+void cSongEditor::refreshListColumnButtonLabels()
 {
-    if (hasSceneColumn() && selectedPlace == scenePlace())
+    const char* encoderLabel = "Pattern";
+    if (selectedPlace == listColumnPlace())
     {
-        display.setControlText(label[5], "Scene");
-        display.setControlText2(label[5], "");
+        if (SongListColumn* column = featureModules.getSongListColumn())
+        {
+            const char* focusLabel = column->focusEncoderLabel();
+            if (focusLabel != nullptr && focusLabel[0] != '\0')
+            {
+                encoderLabel = focusLabel;
+            }
+        }
     }
-    else
-    {
-        display.setControlText(label[5], "Pattern");
-        display.setControlText2(label[5], "");
-    }
+
+    display.setControlText(label[5], encoderLabel);
+    display.setControlText2(label[5], "");
     display.refreshControl(label[5]);
 }
 
@@ -390,7 +395,7 @@ void cSongEditor::activateLabelsBorder()
     if (selectedPlace > frameData.placesCount - 1)
         return;
 
-    songPlayerData.isSceneColumnActive = 0;
+    songPlayerData.isListColumnActive = 0;
 
     if (selectedPlace == tempoPlace()) // tempo
     {
@@ -400,20 +405,20 @@ void cSongEditor::activateLabelsBorder()
         songPlayerData.isListActive = 0;
         songPlayerData.selection.isActive = 0;
         display.refreshControl(songPlayerControl);
-        refreshPatternSceneButtonLabels();
+        refreshListColumnButtonLabels();
         display.synchronizeRefresh();
         return;
     }
-    else if (hasSceneColumn() && selectedPlace == scenePlace()) // scene column
+    else if (hasListColumn() && selectedPlace == listColumnPlace()) // list column
     {
         songPlayerData.isListActive = 1;
-        songPlayerData.isSceneColumnActive = 1;
+        songPlayerData.isListColumnActive = 1;
         songPlayerData.selection.isActive = 0;
         display.setControlValue(frameControl, selectedPlace);
         display.setControlShow(frameControl);
         display.refreshControl(frameControl);
         display.refreshControl(songPlayerControl);
-        refreshPatternSceneButtonLabels();
+        refreshListColumnButtonLabels();
         display.synchronizeRefresh();
         return;
     }
@@ -432,7 +437,7 @@ void cSongEditor::activateLabelsBorder()
 
     display.setControlHide(frameControl);
     display.refreshControl(frameControl);
-    refreshPatternSceneButtonLabels();
+    refreshListColumnButtonLabels();
     display.synchronizeRefresh();
 }
 

@@ -106,14 +106,20 @@ PerformancePage* FeatureModuleRegistry::getPerformancePage(uint8_t index) const
     return nullptr;
 }
 
-SongSlotBinding* FeatureModuleRegistry::getSongSlotBinding() const
+SongListColumn* FeatureModuleRegistry::getSongListColumn() const
 {
     for (uint8_t i = 0; i < moduleCount; i++)
     {
-        SongSlotBinding* binding = modules[i]->songSlotBinding();
-        if (binding != nullptr)
+        ScreenExtension* extension = modules[i]->screenExtension();
+        if (extension == nullptr || extension->screen() != ScreenId::Song)
         {
-            return binding;
+            continue;
+        }
+
+        SongListColumn* column = extension->asSongListColumn();
+        if (column != nullptr)
+        {
+            return column;
         }
     }
     return nullptr;

@@ -28,8 +28,8 @@ class FeatureModuleRegistry
     uint8_t performancePageCount() const;
     PerformancePage* getPerformancePage(uint8_t index) const;
 
-    // First registered module that exposes a SongSlotBinding, or nullptr.
-    SongSlotBinding* getSongSlotBinding() const;
+    // First Song list-column extension, or nullptr.
+    SongListColumn* getSongListColumn() const;
 
   private:
     FeatureModule* modules[kMaxModules] = {};

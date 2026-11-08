@@ -195,9 +195,14 @@ void cSongPlayer::update()
     API_COLOR(colors[0]);
     API_CMD_TEXT(600, posY + 30, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, "Pattern");
 
-    if (controlData != nullptr && controlData->songSlotScenes != nullptr)
+    if (controlData != nullptr && controlData->listColumnHeader != nullptr &&
+        controlData->formatListColumnCell != nullptr)
     {
-        API_CMD_TEXT(680, posY + 30, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, "FX");
+        API_CMD_TEXT(680,
+                     posY + 30,
+                     font->handle,
+                     textStyle | OPT_CENTERY | OPT_CENTERX,
+                     controlData->listColumnHeader);
     }
 
     showList();
@@ -226,7 +231,9 @@ void cSongPlayer::showList()
         return;
     }
 
-    const bool hasScenes = controlData != nullptr && controlData->songSlotScenes != nullptr;
+    const bool hasListColumn = controlData != nullptr &&
+                               controlData->listColumnHeader != nullptr &&
+                               controlData->formatListColumnCell != nullptr;
     int16_t posY = this->posY + 62;
     int16_t width = 210;
     int16_t posX = (this->posX + this->width) - width;
@@ -325,9 +332,9 @@ void cSongPlayer::showList()
             }
 
             drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
-            if (hasScenes)
+            if (hasListColumn)
             {
-                drawSceneValue(i + textListPos, sceneX, y_pos + (i * h_row));
+                drawListColumnCell(i + textListPos, sceneX, y_pos + (i * h_row));
             }
         }
 
@@ -502,9 +509,9 @@ void cSongPlayer::showList()
                     }
 
                     drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
-                    if (hasScenes)
+                    if (hasListColumn)
                     {
-                        drawSceneValue(i + textListPos, sceneX, y_pos + (i * h_row));
+                        drawListColumnCell(i + textListPos, sceneX, y_pos + (i * h_row));
                     }
                 }
             }
@@ -542,9 +549,9 @@ void cSongPlayer::showList()
                     }
 
                     drawIcon(i + table_offset, i, x_pos, y_pos, h_row);
-                    if (hasScenes)
+                    if (hasListColumn)
                     {
-                        drawSceneValue(i + table_offset, sceneX, y_pos + (i * h_row));
+                        drawListColumnCell(i + table_offset, sceneX, y_pos + (i * h_row));
                     }
                 }
             }
@@ -578,9 +585,9 @@ void cSongPlayer::showList()
                 }
 
                 drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
-                if (hasScenes)
+                if (hasListColumn)
                 {
-                    drawSceneValue(i + textListPos, sceneX, y_pos + (i * h_row));
+                    drawListColumnCell(i + textListPos, sceneX, y_pos + (i * h_row));
                 }
             }
         }
@@ -636,23 +643,20 @@ void cSongPlayer::drawIcon(int pos, int row, int x, int y, int h)
     }
 }
 
-void cSongPlayer::drawSceneValue(int slotIndex, int16_t x, int16_t y)
+void cSongPlayer::drawListColumnCell(int slotIndex, int16_t x, int16_t y)
 {
-    if (controlData == nullptr || controlData->songSlotScenes == nullptr || slotIndex < 0)
+    if (controlData == nullptr || controlData->formatListColumnCell == nullptr || slotIndex < 0)
     {
         return;
     }
 
-    const uint8_t value = controlData->songSlotScenes[slotIndex];
-    if (value == 0)
-    {
-        API_COLOR(colors[1]);
-        API_CMD_TEXT(x, y, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, "-");
-        return;
-    }
+    char cell[8] = { 0 };
+    controlData->formatListColumnCell(
+      controlData->listColumnCtx, static_cast<uint8_t>(slotIndex), cell, sizeof(cell));
 
-    API_COLOR(colors[0]);
-    API_CMD_NUMBER(x, y, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, value);
+    const bool empty = cell[0] == '\0' || (cell[0] == '-' && cell[1] == '\0');
+    API_COLOR(empty ? colors[1] : colors[0]);
+    API_CMD_TEXT(x, y, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, cell);
 }
 
 void cSongPlayer::drawTrackNames()

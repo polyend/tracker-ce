@@ -204,9 +204,9 @@ void cFileManager::importItFile_ProcessSong()
                 mtProject.song.playlist[a]++;
             }
         }
-        if (SongSlotBinding* binding = featureModules.getSongSlotBinding())
+        if (SongListColumn* column = featureModules.getSongListColumn())
         {
-            binding->clearAll();
+            column->clearAll();
         }
 
         moveToNextOperationStep();

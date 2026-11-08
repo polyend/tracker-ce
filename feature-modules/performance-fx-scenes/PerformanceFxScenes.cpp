@@ -104,15 +104,15 @@ bool PerformanceFxScenes::validateHeader() const
 
 void PerformanceFxScenes::clampSongSlotScenes()
 {
-    for (uint8_t i = 0; i < SongSlotBinding::kSongSlotCount; i++)
+    for (uint8_t i = 0; i < SongListColumn::kSongSlotCount; i++)
     {
         uint8_t value = externalRamPerfScenesBank.songSlotScene[i];
         if (value > kPerfScenesCount)
         {
-            externalRamPerfScenesBank.songSlotScene[i] = SongSlotBinding::kSceneNone;
+            externalRamPerfScenesBank.songSlotScene[i] = kPerfScenesNone;
         }
     }
-    externalRamPerfScenesBank.songSlotScene[SongSlotBinding::kSongSlotCount] = 0;
+    externalRamPerfScenesBank.songSlotScene[SongListColumn::kSongSlotCount] = 0;
 }
 
 bool PerformanceFxScenes::readFile(const char* path)
@@ -209,14 +209,54 @@ bool PerformanceFxScenes::recallScene(PerformancePageHost& host, uint8_t idx)
     return true;
 }
 
-const uint8_t* PerformanceFxScenes::values() const
+void PerformanceFxScenes::assignSlot(uint8_t slot, uint8_t scene)
 {
-    return externalRamPerfScenesBank.songSlotScene;
+    if (slot >= SongListColumn::kSongSlotCount)
+    {
+        return;
+    }
+
+    if (scene > kPerfScenesCount)
+    {
+        scene = kPerfScenesNone;
+    }
+
+    if (externalRamPerfScenesBank.songSlotScene[slot] == scene)
+    {
+        return;
+    }
+
+    externalRamPerfScenesBank.songSlotScene[slot] = scene;
+    saveToWorkspace();
 }
 
-void PerformanceFxScenes::cycle(uint8_t slot, int8_t delta)
+void PerformanceFxScenes::formatCell(uint8_t slot, char* out, uint8_t outSize) const
 {
-    if (slot >= SongSlotBinding::kSongSlotCount || delta == 0)
+    if (out == nullptr || outSize == 0)
+    {
+        return;
+    }
+
+    out[0] = '\0';
+    if (slot >= SongListColumn::kSongSlotCount)
+    {
+        return;
+    }
+
+    const uint8_t value = externalRamPerfScenesBank.songSlotScene[slot];
+    if (value == kPerfScenesNone || value > kPerfScenesCount)
+    {
+        snprintf(out, outSize, "-");
+        return;
+    }
+
+    snprintf(out, outSize, "%u", static_cast<unsigned>(value));
+}
+
+void PerformanceFxScenes::onEncoder(SongScreenHost& host, uint8_t slot, int8_t delta)
+{
+    (void)host;
+    if (slot >= SongListColumn::kSongSlotCount || delta == 0)
     {
         return;
     }
@@ -234,43 +274,27 @@ void PerformanceFxScenes::cycle(uint8_t slot, int8_t delta)
         value -= maxValue + 1;
     }
 
-    assign(slot, static_cast<uint8_t>(value));
+    assignSlot(slot, static_cast<uint8_t>(value));
 }
 
-void PerformanceFxScenes::assign(uint8_t slot, uint8_t scene)
+void PerformanceFxScenes::onClear(SongScreenHost& host, uint8_t slot)
 {
-    if (slot >= SongSlotBinding::kSongSlotCount)
-    {
-        return;
-    }
-
-    if (scene > kPerfScenesCount)
-    {
-        scene = SongSlotBinding::kSceneNone;
-    }
-
-    if (externalRamPerfScenesBank.songSlotScene[slot] == scene)
-    {
-        return;
-    }
-
-    externalRamPerfScenesBank.songSlotScene[slot] = scene;
-    saveToWorkspace();
+    (void)host;
+    assignSlot(slot, kPerfScenesNone);
 }
 
 void PerformanceFxScenes::onInserted(uint8_t index, bool duplicate)
 {
-    if (index >= SongSlotBinding::kSongSlotCount - 1)
+    if (index >= SongListColumn::kSongSlotCount - 1)
     {
         return;
     }
 
-    for (int i = SongSlotBinding::kSongSlotCount - 1; i > index; i--)
+    for (int i = SongListColumn::kSongSlotCount - 1; i > index; i--)
     {
         externalRamPerfScenesBank.songSlotScene[i] = externalRamPerfScenesBank.songSlotScene[i - 1];
     }
 
-    // Playlist insert places the new row at index+1.
     const uint8_t insertAt = static_cast<uint8_t>(index + 1);
     if (duplicate)
     {
@@ -279,7 +303,7 @@ void PerformanceFxScenes::onInserted(uint8_t index, bool duplicate)
     }
     else
     {
-        externalRamPerfScenesBank.songSlotScene[insertAt] = SongSlotBinding::kSceneNone;
+        externalRamPerfScenesBank.songSlotScene[insertAt] = kPerfScenesNone;
     }
 
     saveToWorkspace();
@@ -287,17 +311,16 @@ void PerformanceFxScenes::onInserted(uint8_t index, bool duplicate)
 
 void PerformanceFxScenes::onRemoved(uint8_t index)
 {
-    if (index >= SongSlotBinding::kSongSlotCount)
+    if (index >= SongListColumn::kSongSlotCount)
     {
         return;
     }
 
-    for (uint8_t i = index; i < SongSlotBinding::kSongSlotCount - 1; i++)
+    for (uint8_t i = index; i < SongListColumn::kSongSlotCount - 1; i++)
     {
         externalRamPerfScenesBank.songSlotScene[i] = externalRamPerfScenesBank.songSlotScene[i + 1];
     }
-    externalRamPerfScenesBank.songSlotScene[SongSlotBinding::kSongSlotCount - 1] =
-      SongSlotBinding::kSceneNone;
+    externalRamPerfScenesBank.songSlotScene[SongListColumn::kSongSlotCount - 1] = kPerfScenesNone;
 
     saveToWorkspace();
 }
@@ -312,13 +335,13 @@ void PerformanceFxScenes::clearAll()
 
 void PerformanceFxScenes::onSlotStart(uint8_t slot)
 {
-    if (slot >= SongSlotBinding::kSongSlotCount)
+    if (slot >= SongListColumn::kSongSlotCount)
     {
         return;
     }
 
     const uint8_t scene = externalRamPerfScenesBank.songSlotScene[slot];
-    if (scene == SongSlotBinding::kSceneNone || scene > kPerfScenesCount)
+    if (scene == kPerfScenesNone || scene > kPerfScenesCount)
     {
         return;
     }
