@@ -1,24 +1,50 @@
 #include "songEditor/songEditor.h"
 
+#include "FeatureModuleRegistry.h"
 #include "Platform.h"
+#include "ScreenHost.h"
 #include "mtSequencer.h"
 #include "string.h"
 
-static const uint16_t framesPlaces[3][4] = {
+static const uint16_t framesPlacesNoColumn[3][4] = {
     { (800 / 8) * 0 + 1, 31, 500 - 3, 391 },
     { (800 / 8) * 5 + 1, 31, 800 / 4 - 3, 391 },
     { (800 / 8) * 7 + 1, 31, 800 / 8 - 3, 391 },
 };
 
+static const uint16_t framesPlacesWithColumn[4][4] = {
+    { (800 / 8) * 0 + 1, 31, 500 - 3, 391 },
+    { (800 / 8) * 5 + 1, 31, 155, 391 },
+    { 656, 31, 42, 391 },
+    { (800 / 8) * 7 + 1, 31, 800 / 8 - 3, 391 },
+};
+
+void cSongEditor::configureFramePlaces()
+{
+    if (hasListColumn())
+    {
+        frameData.placesCount = 4;
+        frameData.startPlace = 3;
+        frameData.places[0] = &framesPlacesWithColumn[0][0];
+        frameData.places[1] = &framesPlacesWithColumn[1][0];
+        frameData.places[2] = &framesPlacesWithColumn[2][0];
+        frameData.places[3] = &framesPlacesWithColumn[3][0];
+    }
+    else
+    {
+        frameData.placesCount = 3;
+        frameData.startPlace = 2;
+        frameData.places[0] = &framesPlacesNoColumn[0][0];
+        frameData.places[1] = &framesPlacesNoColumn[1][0];
+        frameData.places[2] = &framesPlacesNoColumn[2][0];
+        frameData.places[3] = nullptr;
+    }
+}
+
 void cSongEditor::initDisplayControls()
 {
     strControlProperties prop;
-    frameData.placesCount = 3;
-    frameData.startPlace = 2;
-
-    frameData.places[0] = &framesPlaces[0][0];
-    frameData.places[1] = &framesPlaces[1][0];
-    frameData.places[2] = &framesPlaces[2][0];
+    configureFramePlaces();
 
     prop.style = 0;
     prop.value = 0;
@@ -104,10 +130,43 @@ void cSongEditor::initDisplayControls()
       (display.getTheme().bottomScreenShadow > 0 ? controlStyleBottomShadow : 0);
 
     songPlayerControl = display.createControl<cSongPlayer>(&prop);
+
+    for (uint8_t i = 0; i < kModePageListRows; i++)
+    {
+        modePageParamNamePtrs[i] = modePageParamNames[i];
+        modePageParamValuePtrs[i] = modePageParamValues[i];
+        modePageParamNames[i][0] = '\0';
+        modePageParamValues[i][0] = '\0';
+    }
+
+    modePageList.linesCount = kModePageListRows;
+    modePageList.start = 0;
+    modePageList.length = kModePageListRows;
+    modePageList.params = modePageParamNamePtrs;
+    modePageList.values = modePageParamValuePtrs;
+    modePageList.valueEditActive = 0;
+
+    strControlProperties listProp;
+    listProp.style = controlStyleFont1 | controlStyleBackground |
+                     (display.getTheme().bottomScreenShadow > 0 ? controlStyleBottomShadow : 0);
+    listProp.x = 0 + 1;
+    listProp.y = 29;
+    listProp.w = 800 - 2;
+    listProp.h = 394;
+    listProp.value = 0;
+    listProp.colors = display.getTheme().activeListColors;
+    listProp.data = &modePageList;
+    modePageListControl = display.createControl<cParamValueList>(&listProp);
 }
 
 void cSongEditor::refreshTempoField()
 {
+    if (isModePageOpen())
+    {
+        showTempoValue();
+        return;
+    }
+
     if (tapTempoActive && tapTempoCount > 1)
     {
         memset(tapText, 0, sizeof(tapText));
@@ -182,8 +241,7 @@ void cSongEditor::showDefaultScreen()
     display.setControlText(label[4], "Delete");
     display.setControlText2(label[4], "Slot");
 
-    display.setControlText(label[5], "Pattern");
-    display.setControlText2(label[5], "");
+    refreshListColumnButtonLabels();
 
     display.setControlText(label[6], "");
     display.setControlText2(label[6], "");
@@ -346,12 +404,51 @@ void cSongEditor::refreshButtonsLabels()
 
 //==============================================================================================================
 
+void cSongEditor::refreshListColumnButtonLabels()
+{
+    const char* encoderLabel = "Pattern";
+    if (selectedPlace == listColumnPlace())
+    {
+        if (SongListColumn* column = featureModules.getSongListColumn())
+        {
+            const char* focusLabel = column->focusEncoderLabel();
+            if (focusLabel != nullptr && focusLabel[0] != '\0')
+            {
+                encoderLabel = focusLabel;
+            }
+        }
+    }
+
+    display.setControlText(label[5], encoderLabel);
+    display.setControlText2(label[5], "");
+    display.refreshControl(label[5]);
+}
+
 void cSongEditor::activateLabelsBorder()
 {
+    // Song mode pages own the screen; don't re-show playlist chrome/frames.
+    if (activeModePage != nullptr)
+    {
+        songPlayerData.isListColumnActive = 0;
+        display.setControlHide(frameControl);
+        display.refreshControl(frameControl);
+        refreshListColumnButtonLabels();
+        display.synchronizeRefresh();
+        return;
+    }
+
     if (selectedPlace > frameData.placesCount - 1)
         return;
 
-    if (selectedPlace == 2) // tempo
+    songPlayerData.isListColumnActive = 0;
+
+    // List column focus (red frame) is record-mode only.
+    if (hasListColumn() && selectedPlace == listColumnPlace() && !editMode)
+    {
+        selectedPlace = 1;
+    }
+
+    if (selectedPlace == tempoPlace()) // tempo
     {
         display.setControlValue(frameControl, selectedPlace);
         display.setControlShow(frameControl);
@@ -359,6 +456,21 @@ void cSongEditor::activateLabelsBorder()
         songPlayerData.isListActive = 0;
         songPlayerData.selection.isActive = 0;
         display.refreshControl(songPlayerControl);
+        refreshListColumnButtonLabels();
+        display.synchronizeRefresh();
+        return;
+    }
+    else if (hasListColumn() && selectedPlace == listColumnPlace() && editMode)
+    {
+        // Column has its own frame; don't wrap it in the pattern-list selection.
+        songPlayerData.isListActive = 0;
+        songPlayerData.isListColumnActive = 1;
+        songPlayerData.selection.isActive = 0;
+        display.setControlValue(frameControl, selectedPlace);
+        display.setControlShow(frameControl);
+        display.refreshControl(frameControl);
+        display.refreshControl(songPlayerControl);
+        refreshListColumnButtonLabels();
         display.synchronizeRefresh();
         return;
     }
@@ -377,11 +489,20 @@ void cSongEditor::activateLabelsBorder()
 
     display.setControlHide(frameControl);
     display.refreshControl(frameControl);
+    refreshListColumnButtonLabels();
     display.synchronizeRefresh();
 }
 
 void cSongEditor::showTempoValue()
 {
+    // Song FX mode page owns the right column + soft button 8; keep tempo chrome hidden.
+    if (isModePageOpen())
+    {
+        display.setControlHide(barControl);
+        display.refreshControl(barControl);
+        return;
+    }
+
     if (sequencer.isSetInternalClock())
     {
         sprintf(globalTempoVal, "%.1f BPM", mtProject.values.globalTempo);
@@ -427,4 +548,132 @@ void cSongEditor::hideIcon()
 
     // display.setControlValue(songPlayerControl, selectedPattern);
     display.refreshControl(songPlayerControl);
+}
+
+void cSongEditor::showModePageScreen()
+{
+    titleBar->show();
+
+    songPlayerData.isListColumnActive = 0;
+    display.setControlHide(songPlayerControl);
+    display.setControlHide(frameControl);
+    display.setControlHide(barControl);
+    display.refreshControl(songPlayerControl);
+
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        display.setControlStyle2(label[i],
+                                 controlStyleCenterX | controlStyleCenterY | controlStyleFont3);
+        display.setControlValue(label[i], 1);
+        display.setControlShow(label[i]);
+        display.refreshControl(label[i]);
+    }
+
+    display.setControlShow(bgLabel);
+    display.refreshControl(bgLabel);
+
+    display.setControlData(modePageListControl, &modePageList);
+    display.setControlValue(modePageListControl, 0);
+    display.setControlShow(modePageListControl);
+    display.refreshControl(modePageListControl);
+
+    display.synchronizeRefresh();
+}
+
+void cSongEditor::hideModePageScreen()
+{
+    display.setControlHide(modePageListControl);
+    display.refreshControl(modePageListControl);
+}
+
+void cSongEditor::setModePageTitle(const char* title)
+{
+    titleBar->show();
+    titleBar->setTitle(title != nullptr ? title : "");
+}
+
+void cSongEditor::setModePageLine(uint8_t row, const char* text)
+{
+    (void)row;
+    (void)text;
+}
+
+void cSongEditor::setModePageScreenLabel(uint8_t index,
+                                            const char* text,
+                                            uint8_t state,
+                                            const char* text2)
+{
+    if (index >= 8)
+    {
+        return;
+    }
+
+    const uint32_t* colors = display.getTheme().inactiveLabelsColors;
+    if (state == static_cast<uint8_t>(SongEditorLabelState::Active))
+    {
+        colors = display.getTheme().performActiveTrackLabelsColors;
+    }
+    else if (state == static_cast<uint8_t>(SongEditorLabelState::Filled))
+    {
+        colors = display.getTheme().performActiveTrackLabelsColors;
+    }
+
+    display.setControlColors(label[index], colors);
+    display.setControlText(label[index], text != nullptr ? text : "");
+    display.setControlText2(label[index], text2 != nullptr ? (char*)text2 : (char*)"");
+    display.setControlStyle(label[index],
+                            controlStyleCenterX | controlStyleCenterY | controlStyleFont3);
+    display.setControlShow(label[index]);
+    display.refreshControl(label[index]);
+}
+
+void cSongEditor::finishModePageLabels()
+{
+    display.synchronizeRefresh();
+}
+
+void cSongEditor::setModePageListCount(uint8_t count)
+{
+    if (count > kModePageListRows)
+    {
+        count = kModePageListRows;
+    }
+    modePageList.length = count;
+    modePageList.linesCount = count > 0 ? count : 1;
+    modePageList.params = modePageParamNamePtrs;
+    modePageList.values = modePageParamValuePtrs;
+}
+
+void cSongEditor::setModePageListRow(uint8_t index, const char* name, const char* value)
+{
+    if (index >= kModePageListRows)
+    {
+        return;
+    }
+
+    snprintf(modePageParamNames[index],
+             kModePageListNameLen,
+             "%s",
+             name != nullptr ? name : "");
+    snprintf(modePageParamValues[index],
+             kModePageListValueLen,
+             "%s",
+             value != nullptr ? value : "");
+}
+
+void cSongEditor::setModePageListFocus(uint8_t index, bool editingValue)
+{
+    modePageList.start = index;
+    modePageList.valueEditActive = editingValue ? 1 : 0;
+    display.setControlData(modePageListControl, &modePageList);
+    display.setControlValue(modePageListControl, index);
+    display.setControlShow(modePageListControl);
+    display.refreshControl(modePageListControl);
+}
+
+void cSongEditor::refreshModePage()
+{
+    display.setControlData(modePageListControl, &modePageList);
+    display.refreshControl(modePageListControl);
+    display.synchronizeRefresh();
 }

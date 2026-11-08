@@ -4,6 +4,31 @@ All notable changes to the **Polyend Tracker Community Edition (CE)** firmware a
 
 ---
 
+## [Unreleased] — Feature Module SDK + Song FX Scenes
+
+### Added
+
+1. **Feature Module SDK expansion (All 3 Devices)**
+   * Song Mode extensions: optional playlist **list column** (`SongListColumn`) and Mini-menu **mode pages** (`SongModePage`) via `ScreenHost.h`.
+   * Modules can export **pattern Step FX** (ids `128`–`143`) into the runtime FX catalog without editing core FX tables.
+   * See [`docs/feature_module_sdk.md`](docs/feature_module_sdk.md).
+
+2. **Song FX Scenes module (`song-fx-scenes`)**
+   * Song playlist **FX** column (`-` / `1`–`8`); focusable only while **Rec** is on.
+   * Song Mini-menu **FX** mode page to edit 8 banks of up to 8 Performance-engine FX type/value pairs (`songfxscenes.bin`).
+   * Pattern Step FX **`N` / FX Scene** (values 1–8) applies the same lists on the main thread.
+   * Independent from Performance **Scenes** (`perfscenes.bin` rack snapshots).
+
+3. **Performance page UI polish (mute banks / pattern launch / FX scenes)**
+   * Clearer Active / Filled soft-button states; Mute page reflects live track mute.
+
+### Changed
+
+* **`perfscenes.bin` v3** is scenes-only. Legacy v1/v2 still load; **v2 song-row scene bindings are ignored** (no migration into `songfxscenes.bin` — reassign rows in Song if you used experimental v2 bindings on this branch).
+* Song host keeps chrome/dispatch only; product strings and scene logic live in feature modules.
+
+---
+
 ## [1.0.0] - Initial Community Edition Release
 
 > **⚠️ Important :: Project Compatibility Notice:**

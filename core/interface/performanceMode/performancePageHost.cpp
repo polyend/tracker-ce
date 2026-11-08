@@ -1,5 +1,6 @@
 #include "PerformanceHost.h"
 
+#include "core/interface.h"
 #include "core/interfaceDefs.h"
 #include "display.h"
 #include "fileManager.h"
@@ -21,19 +22,40 @@ class PerformancePageHostImpl : public PerformancePageHost
         performanceMode.titleBar->setTitle(title != nullptr ? title : "");
     }
 
-    void setScreenLabel(uint8_t index, const char* text, bool filled) override
+    void setScreenLabel(uint8_t index,
+                        const char* text,
+                        PerformanceLabelState state,
+                        const char* text2) override
     {
         if (index >= 8)
         {
             return;
         }
 
-        const uint32_t* colors = filled ? display.getTheme().performActiveTrackLabelsColors
-                                        : display.getTheme().inactiveLabelsColors;
+        const uint32_t* colors = display.getTheme().inactiveLabelsColors;
+        if (state == PerformanceLabelState::Active)
+        {
+            colors = display.getTheme().performActiveTrackLabelsColors;
+        }
+        else if (state == PerformanceLabelState::Muted)
+        {
+            colors = display.getTheme().performMutedTrackLabelsColors;
+        }
+        else if (state == PerformanceLabelState::Filled)
+        {
+            colors = display.getTheme().performActiveTrackLabelsColors;
+        }
+
+        const char* secondary = text2;
+        if (secondary == nullptr && state == PerformanceLabelState::Active)
+        {
+            secondary = "Active";
+        }
 
         display.setControlColors(performanceMode.label[index], colors);
         display.setControlText(performanceMode.label[index], text != nullptr ? text : "");
-        display.setControlText2(performanceMode.label[index], (char*)"");
+        display.setControlText2(performanceMode.label[index],
+                                secondary != nullptr ? (char*)secondary : (char*)"");
         display.setControlStyle(performanceMode.label[index],
                                 controlStyleCenterX | controlStyleCenterY | controlStyleFont3);
         display.setControlShow(performanceMode.label[index]);
@@ -61,9 +83,40 @@ class PerformancePageHostImpl : public PerformancePageHost
         display.synchronizeRefresh();
     }
 
+    bool isShowingFxRack() const override
+    {
+        return mtInterface.isPerformanceModeScreenActive() &&
+               !performanceMode.isPerformancePageActive();
+    }
+
+    bool isActivePerformancePage(const PerformancePage* page) const override
+    {
+        return page != nullptr && performanceMode.getActivePerformancePage() == page;
+    }
+
     bool isShiftPressed() const override
     {
         return performanceMode.buttons->isButtonPressed(interfaceButtonShift);
+    }
+
+    uint8_t tracksPage() const override { return performanceMode.tracksPage ? 1 : 0; }
+
+    bool isSampleTrackMuted(uint8_t index) const override
+    {
+        if (index >= kSampleTracks || index >= kPerfHostSampleTracks)
+        {
+            return false;
+        }
+        return mtProject.values.trackMute[index] != 0;
+    }
+
+    bool isMidiTrackMuted(uint8_t index) const override
+    {
+        if (index >= kMaxMidiTracksInTrackers || index >= kPerfHostMidiTracks)
+        {
+            return false;
+        }
+        return mtProject.values.midiTrackMute[index] != 0;
     }
 
     void captureFxScene(strPerfScene& scene) override { performance.captureScene(scene); }
@@ -131,6 +184,24 @@ class PerformancePageHostImpl : public PerformancePageHost
         newFileManager.setProjectStructChanged();
         performanceMode.refreshTrackState = 1;
     }
+
+    uint8_t performanceFxCount() const override { return performance.getFxCount(); }
+
+    const char* performanceFxName(uint8_t fxId) const override
+    {
+        return performance.getFxName(fxId);
+    }
+
+    int16_t performanceFxMin(uint8_t fxId) const override { return performance.getFxMin(fxId); }
+
+    int16_t performanceFxMax(uint8_t fxId) const override { return performance.getFxMax(fxId); }
+
+    void applyPerformanceFx(uint8_t fxId, int16_t value) override
+    {
+        performance.applyFx(fxId, value);
+    }
+
+    void clearPerformanceFx(uint8_t fxId) override { performance.clearFx(fxId); }
 };
 
 static PerformancePageHostImpl s_performancePageHost;

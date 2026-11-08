@@ -53,6 +53,17 @@ enum PerformancePageButtonState : uint8_t
     kPerformanceButtonDouble = 3,
 };
 
+// Visual state for Performance page soft-button labels.
+enum class PerformanceLabelState : uint8_t
+{
+    Empty = 0,  // no stored slot — inactive colors
+    Filled = 1, // slot has data
+    Active = 2, // currently recalled / armed slot
+    Muted = 3,  // live track mute emphasis (Mutes page)
+};
+
+class PerformancePage;
+
 // Host services available to a PerformancePage while it is active.
 // Implemented by Performance Mode inside the firmware — modules depend only
 // on this header, not on performanceMode.h / display internals.
@@ -62,14 +73,27 @@ class PerformancePageHost
     virtual ~PerformancePageHost() {}
 
     virtual void setPageTitle(const char* title) = 0;
-    // index 0..7 screen buttons under the display
-    virtual void setScreenLabel(uint8_t index, const char* text, bool filled) = 0;
+    // index 0..7 screen buttons under the display.
+    // text2 is optional secondary line (e.g. "Active", "Mute").
+    virtual void setScreenLabel(uint8_t index,
+                                const char* text,
+                                PerformanceLabelState state,
+                                const char* text2 = nullptr) = 0;
     virtual void finishScreenLabels() = 0;
 
     virtual void restoreTrackLabels() = 0;
     virtual void refreshFxRack() = 0;
+    // True when Performance Mode is showing the FX rack (not a module page).
+    virtual bool isShowingFxRack() const = 0;
+    // True when Performance Mode is showing this exact module page.
+    virtual bool isActivePerformancePage(const PerformancePage* page) const = 0;
 
     virtual bool isShiftPressed() const = 0;
+
+    // 0 = sample tracks 1-8 on soft buttons, 1 = MIDI tracks 1-8.
+    virtual uint8_t tracksPage() const = 0;
+    virtual bool isSampleTrackMuted(uint8_t index) const = 0;
+    virtual bool isMidiTrackMuted(uint8_t index) const = 0;
 
     virtual void captureFxScene(strPerfScene& scene) = 0;
     virtual void recallFxScene(const strPerfScene& scene) = 0;
@@ -79,6 +103,15 @@ class PerformancePageHost
 
     virtual void captureMuteScene(strMuteScene& scene) = 0;
     virtual void recallMuteScene(const strMuteScene& scene) = 0;
+
+    // Performance engine FX catalog + live apply (usable without a Performance page).
+    // fxId 0 is none/empty. Valid ids are 1 .. performanceFxCount()-1.
+    virtual uint8_t performanceFxCount() const = 0;
+    virtual const char* performanceFxName(uint8_t fxId) const = 0;
+    virtual int16_t performanceFxMin(uint8_t fxId) const = 0;
+    virtual int16_t performanceFxMax(uint8_t fxId) const = 0;
+    virtual void applyPerformanceFx(uint8_t fxId, int16_t value) = 0;
+    virtual void clearPerformanceFx(uint8_t fxId) = 0;
 };
 
 // Firmware-provided host for Performance Mode pages.

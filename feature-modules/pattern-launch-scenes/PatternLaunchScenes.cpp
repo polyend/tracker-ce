@@ -92,6 +92,46 @@ void PatternLaunchScenes::clearBank()
     externalRamPatternScenesBank.magic[3] = 'C';
     externalRamPatternScenesBank.version = kPatternScenesFileVersion;
     externalRamPatternScenesBank.count = kPatternScenesCount;
+    activeSlot = 0xFF;
+}
+
+void PatternLaunchScenes::setActiveSlot(uint8_t idx)
+{
+    activeSlot = (idx < kPatternScenesCount) ? idx : 0xFF;
+}
+
+void PatternLaunchScenes::refreshPage(PerformancePageHost& host)
+{
+    static const char* const slotLabels[kPatternScenesCount] = {
+        "1", "2", "3", "4", "5", "6", "7", "8"
+    };
+
+    if (activeSlot < kPatternScenesCount)
+    {
+        // TitleBar stores a pointer — keep this buffer stable.
+        static char titleBuf[24];
+        snprintf(titleBuf, sizeof(titleBuf), "Patterns - %u", static_cast<unsigned>(activeSlot + 1));
+        host.setPageTitle(titleBuf);
+    }
+    else
+    {
+        host.setPageTitle(title());
+    }
+
+    for (uint8_t i = 0; i < kPatternScenesCount; i++)
+    {
+        PerformanceLabelState state = PerformanceLabelState::Empty;
+        if (i == activeSlot)
+        {
+            state = PerformanceLabelState::Active;
+        }
+        else if (isFilled(i))
+        {
+            state = PerformanceLabelState::Filled;
+        }
+        host.setScreenLabel(i, slotLabels[i], state);
+    }
+    host.finishScreenLabels();
 }
 
 bool PatternLaunchScenes::validateHeader() const
@@ -177,26 +217,18 @@ bool PatternLaunchScenes::recallScene(PerformancePageHost& host, uint8_t idx)
     }
 
     host.recallPatternScene(externalRamPatternScenesBank.scenes[idx]);
+    setActiveSlot(idx);
     return true;
 }
 
 void PatternLaunchScenes::onShow(PerformancePageHost& host)
 {
-    static const char* const slotLabels[kPatternScenesCount] = {
-        "1", "2", "3", "4", "5", "6", "7", "8"
-    };
-
-    host.setPageTitle(title());
-    for (uint8_t i = 0; i < kPatternScenesCount; i++)
-    {
-        host.setScreenLabel(i, slotLabels[i], isFilled(i));
-    }
-    host.finishScreenLabels();
+    refreshPage(host);
 }
 
 void PatternLaunchScenes::onHide(PerformancePageHost& host)
 {
-    host.restoreTrackLabels();
+    (void)host;
 }
 
 void PatternLaunchScenes::onScreenButton(PerformancePageHost& host, uint8_t button, uint8_t state)
@@ -211,10 +243,10 @@ void PatternLaunchScenes::onScreenButton(PerformancePageHost& host, uint8_t butt
         char name[kPerfFxSceneNameLength];
         snprintf(name, sizeof(name), "Pat %d", button + 1);
         storeScene(host, button, name);
-        onShow(host);
+        refreshPage(host);
     }
-    else
+    else if (recallScene(host, button))
     {
-        recallScene(host, button);
+        refreshPage(host);
     }
 }

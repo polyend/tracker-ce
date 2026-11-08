@@ -808,7 +808,7 @@ void cPatternEditor::refreshPattern()
             else
             {
                 uint8_t type_temp = interfaceGlobals.fxIdToName(seqStep.fx[1].type);
-                if (type_temp > 0 && type_temp < FX_COUNT)
+                if (type_temp > 0 && type_temp < interfaceGlobals.getFxCount())
                 {
                     row.fx[0][0] = 0;
                     row.fx[0][1] = 0;
@@ -827,7 +827,7 @@ void cPatternEditor::refreshPattern()
                 }
                 //--------------------------------------------------------------------------------------------
                 type_temp = interfaceGlobals.fxIdToName(seqStep.fx[0].type);
-                if (type_temp > 0 && type_temp < FX_COUNT)
+                if (type_temp > 0 && type_temp < interfaceGlobals.getFxCount())
                 {
                     row.fx[1][0] = 0;
                     row.fx[1][1] = 0;
@@ -925,7 +925,7 @@ uint8_t cPatternEditor::getStepFx()
                                                     .fx[fx_index]
                                                     .type);
 
-    if (fx_type < FX_COUNT - FX_COUNT_HIDDEN_FXes)
+    if (fx_type < interfaceGlobals.getFxCount() - FX_COUNT_HIDDEN_FXes)
         selectedFx = fx_type;
 
     if (selectedFx == 0)
@@ -1589,7 +1589,9 @@ void cPatternEditor::changeFillData(int16_t value, bool rollListOver)
             value = clamp<int>(value, -5, 5);
             ptrVal = &fillData[fillIdx].param;
             min = (editParam == EditNote ? 0 : -1);
-            max = (editParam == EditNote ? MAX_SCALE : FX_COUNT - 1 - FX_COUNT_HIDDEN_FXes);
+            max = (editParam == EditNote
+                     ? MAX_SCALE
+                     : interfaceGlobals.getFxCount() - 1 - FX_COUNT_HIDDEN_FXes);
             break;
         case 5: // density
             ptrVal = &fillData[fillIdx].density[fillData[fillIdx].fillStep];
@@ -1716,7 +1718,7 @@ void cPatternEditor::changneFillDataByPad(uint8_t pad)
             }
             else if (editParam >= 2 && !isMicVolView)
             {
-                if (pad < FX_COUNT - FX_COUNT_HIDDEN_FXes)
+                if (pad < interfaceGlobals.getFxCount() - FX_COUNT_HIDDEN_FXes)
                     fillData[fillIdx].param = pad;
             }
             break;

@@ -3,6 +3,7 @@
 
 #include "mtSequencer.h"
 
+#include "ScreenHost.h"
 #include "fileManager.h"
 #include "fileTransfer.h"
 #include "log.h"
@@ -203,6 +204,7 @@ void cFileManager::importItFile_ProcessSong()
                 mtProject.song.playlist[a]++;
             }
         }
+        notifySongPlaylistReplaced();
 
         moveToNextOperationStep();
     }

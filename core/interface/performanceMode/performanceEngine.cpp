@@ -99,6 +99,80 @@ const char* cPerformEngine::getSlotFxName(uint8_t slot)
     return fxList[slotToFx[slot]]->name;
 }
 
+const char* cPerformEngine::getFxName(uint8_t fxId) const
+{
+    if (fxId >= fxCount || fxList[fxId] == nullptr)
+    {
+        return "";
+    }
+    return fxList[fxId]->name != nullptr ? fxList[fxId]->name : "";
+}
+
+int16_t cPerformEngine::getFxMin(uint8_t fxId) const
+{
+    if (fxId >= fxCount || fxList[fxId] == nullptr || fxList[fxId]->setup == nullptr)
+    {
+        return 0;
+    }
+    return fxList[fxId]->setup->min;
+}
+
+int16_t cPerformEngine::getFxMax(uint8_t fxId) const
+{
+    if (fxId >= fxCount || fxList[fxId] == nullptr || fxList[fxId]->setup == nullptr)
+    {
+        return 0;
+    }
+    return fxList[fxId]->setup->max;
+}
+
+bool cPerformEngine::isGlobalFx(uint8_t fxId) const
+{
+    if (fxId >= fxCount || fxList[fxId] == nullptr || fxList[fxId]->setup == nullptr)
+    {
+        return false;
+    }
+    return fxList[fxId]->setup->isGlobalFx;
+}
+
+void cPerformEngine::applyFx(uint8_t fxId, int16_t value)
+{
+    if (fxId == 0 || fxId >= fxCount || fxList[fxId] == nullptr)
+    {
+        return;
+    }
+
+    if (isGlobalFx(fxId))
+    {
+        loadGlobalFxValue(fxId, value);
+        return;
+    }
+
+    for (uint8_t track = 0; track < kPerformanceTracks; track++)
+    {
+        fxList[fxId]->setFunct(track, value);
+    }
+}
+
+void cPerformEngine::clearFx(uint8_t fxId)
+{
+    if (fxId == 0 || fxId >= fxCount || fxList[fxId] == nullptr)
+    {
+        return;
+    }
+
+    if (isGlobalFx(fxId))
+    {
+        resetGlobalFxValue(fxId);
+        return;
+    }
+
+    for (uint8_t track = 0; track < kPerformanceTracks; track++)
+    {
+        fxList[fxId]->clearFunct(track);
+    }
+}
+
 // 0-3 zasiweca padem; 4 gasi wszystko - fx none
 int8_t cPerformEngine::getSelectedRow(uint8_t slot)
 {

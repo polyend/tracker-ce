@@ -362,7 +362,7 @@ void InterfacePopups::showFxesPopup()
 
     instrList.start = selectedActualItem;
     instrList.linesCount = 15;
-    instrList.length = FX_COUNT - FX_COUNT_HIDDEN_FXes;
+    instrList.length = interfaceGlobals.getFxCount() - FX_COUNT_HIDDEN_FXes;
     instrList.data = (char**)interfaceGlobals.ptrFxNames;
 
     display.setControlSize(popupListControl, -1, 420);
@@ -741,7 +741,8 @@ void InterfacePopups::setStepPopupValue(int16_t value)
         }
         case stepPopupFx:
         {
-            selectedActualItem = clamp<int8_t>(value, 0, FX_COUNT - 1 - FX_COUNT_HIDDEN_FXes);
+            selectedActualItem =
+              clamp<int8_t>(value, 0, interfaceGlobals.getFxCount() - 1 - FX_COUNT_HIDDEN_FXes);
             mtProject.values.lastUsedFx = selectedActualItem;
 
             display.setControlValue(popupListControl, selectedActualItem);
@@ -871,7 +872,9 @@ void InterfacePopups::changeStepPopupValue(int16_t value, InterfacePopups::Popup
             padsBacklight.setBackLayer(0, 0, selectedActualItem);
 
             selectedActualItem =
-              clamp<int8_t>(selectedActualItem + value, 0, FX_COUNT - 1 - FX_COUNT_HIDDEN_FXes);
+              clamp<int8_t>(selectedActualItem + value,
+                            0,
+                            interfaceGlobals.getFxCount() - 1 - FX_COUNT_HIDDEN_FXes);
 
             mtProject.values.lastUsedFx = selectedActualItem;
             display.setControlValue(popupListControl, selectedActualItem);

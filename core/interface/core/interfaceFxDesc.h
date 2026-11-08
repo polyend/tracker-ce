@@ -4,7 +4,7 @@
 
 #ifdef FEATURE_SYNTH
 
-const char* const fxDescriptions[FX_COUNT] = {
+const char* const fxBuiltinDescriptions[FX_BUILTIN_COUNT] = {
     // Sequencer::strFxConsts::enFxType::FX_TYPE_NONE,
     "Destination: Sample, Synth, MIDI \n\nIndicates that there's no effect used on the desired "
     "step.",
@@ -311,7 +311,7 @@ const char* const fxDescriptions[FX_COUNT] = {
     "Breaks current pattern playback and jumps to the next pattern.",
 };
 #else
-const char* const fxDescriptions[FX_COUNT] = {
+const char* const fxBuiltinDescriptions[FX_BUILTIN_COUNT] = {
     // Sequencer::strFxConsts::enFxType::FX_TYPE_NONE,
     "Destination: Sample, MIDI \n\nIndicates that there's no effect used on the desired "
     "step.",
