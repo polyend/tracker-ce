@@ -62,6 +62,8 @@ enum class PerformanceLabelState : uint8_t
     Muted = 3,  // live track mute emphasis (Mutes page)
 };
 
+class PerformancePage;
+
 // Host services available to a PerformancePage while it is active.
 // Implemented by Performance Mode inside the firmware — modules depend only
 // on this header, not on performanceMode.h / display internals.
@@ -83,6 +85,8 @@ class PerformancePageHost
     virtual void refreshFxRack() = 0;
     // True when Performance Mode is showing the FX rack (not a module page).
     virtual bool isShowingFxRack() const = 0;
+    // True when Performance Mode is showing this exact module page.
+    virtual bool isActivePerformancePage(const PerformancePage* page) const = 0;
 
     virtual bool isShiftPressed() const = 0;
 
@@ -99,6 +103,15 @@ class PerformancePageHost
 
     virtual void captureMuteScene(strMuteScene& scene) = 0;
     virtual void recallMuteScene(const strMuteScene& scene) = 0;
+
+    // Performance engine FX catalog + live apply (usable without a Performance page).
+    // fxId 0 is none/empty. Valid ids are 1 .. performanceFxCount()-1.
+    virtual uint8_t performanceFxCount() const = 0;
+    virtual const char* performanceFxName(uint8_t fxId) const = 0;
+    virtual int16_t performanceFxMin(uint8_t fxId) const = 0;
+    virtual int16_t performanceFxMax(uint8_t fxId) const = 0;
+    virtual void applyPerformanceFx(uint8_t fxId, int16_t value) = 0;
+    virtual void clearPerformanceFx(uint8_t fxId) = 0;
 };
 
 // Firmware-provided host for Performance Mode pages.

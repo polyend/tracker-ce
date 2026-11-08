@@ -11,42 +11,6 @@ __NOINIT(EXTERNAL_RAM) static strPerfScenesFile externalRamPerfScenesBank;
 
 PerformanceFxScenes performanceFxScenes;
 
-static const PatternStepFxInfo kPerfScenePatternStepFx = {
-    kPerfFxScenePatternStepFxId,
-    'N',
-    "Perf FX Scene",
-    "Perf Scene",
-    "Recall Performance FX scene 1-8.",
-    1,
-    kPerfScenesCount,
-    1,
-};
-
-const PatternStepFxInfo* PerformanceFxScenes::patternStepFx(uint8_t index) const
-{
-    return index == 0 ? &kPerfScenePatternStepFx : nullptr;
-}
-
-bool PerformanceFxScenes::onPatternStepFx(uint8_t typeId, uint8_t value)
-{
-    if (typeId != kPerfFxScenePatternStepFxId)
-    {
-        return false;
-    }
-
-    if (value < 1 || value > kPerfScenesCount)
-    {
-        return true;
-    }
-
-    PerformancePageHost& host = getPerformancePageHost();
-    if (recallScene(host, static_cast<uint8_t>(value - 1)) && host.isShowingFxRack())
-    {
-        host.refreshFxRack();
-    }
-    return true;
-}
-
 void PerformanceFxScenes::init(FileSystem* fileSystem)
 {
     this->fileSystem = fileSystem;
@@ -144,8 +108,9 @@ void PerformanceFxScenes::refreshPage(PerformancePageHost& host)
 
     if (activeSlot < kPerfScenesCount)
     {
-        char titleBuf[24];
-        snprintf(titleBuf, sizeof(titleBuf), "Scenes · %u", static_cast<unsigned>(activeSlot + 1));
+        // TitleBar stores a pointer — keep this buffer stable.
+        static char titleBuf[24];
+        snprintf(titleBuf, sizeof(titleBuf), "Scenes - %u", static_cast<unsigned>(activeSlot + 1));
         host.setPageTitle(titleBuf);
     }
     else
@@ -177,51 +142,38 @@ bool PerformanceFxScenes::validateHeader() const
            externalRamPerfScenesBank.count == kPerfScenesCount;
 }
 
-void PerformanceFxScenes::clampSongSlotScenes()
-{
-    for (uint8_t i = 0; i < SongListColumn::kSongSlotCount; i++)
-    {
-        uint8_t value = externalRamPerfScenesBank.songSlotScene[i];
-        if (value > kPerfScenesCount)
-        {
-            externalRamPerfScenesBank.songSlotScene[i] = kPerfScenesNone;
-        }
-    }
-    externalRamPerfScenesBank.songSlotScene[SongListColumn::kSongSlotCount] = 0;
-}
-
 bool PerformanceFxScenes::readFile(const char* path)
 {
-    if (ModuleSidecar::read(
-          fileSystem, path, &externalRamPerfScenesBank, sizeof(externalRamPerfScenesBank)))
+    // v1 and v3 share the same blob size (scenes only).
+    strPerfScenesFile scenesOnly;
+    if (ModuleSidecar::read(fileSystem, path, &scenesOnly, sizeof(scenesOnly)))
     {
-        if (!validateHeader())
+        if (scenesOnly.magic[0] == 'P' && scenesOnly.magic[1] == 'F' && scenesOnly.magic[2] == 'X' &&
+            scenesOnly.magic[3] == 'S' && scenesOnly.count == kPerfScenesCount &&
+            (scenesOnly.version == kPerfScenesFileVersion ||
+             scenesOnly.version == kPerfScenesFileVersionV1))
         {
             clearBank();
-            return false;
+            memcpy(externalRamPerfScenesBank.scenes, scenesOnly.scenes, sizeof(scenesOnly.scenes));
+            return true;
         }
-
-        clampSongSlotScenes();
-        return true;
     }
 
-    strPerfScenesFileV1 legacyBank;
-    if (!ModuleSidecar::read(fileSystem, path, &legacyBank, sizeof(legacyBank)))
+    strPerfScenesFileV2 legacyV2;
+    if (ModuleSidecar::read(fileSystem, path, &legacyV2, sizeof(legacyV2)))
     {
-        return false;
-    }
-
-    if (!(legacyBank.magic[0] == 'P' && legacyBank.magic[1] == 'F' && legacyBank.magic[2] == 'X' &&
-          legacyBank.magic[3] == 'S' && legacyBank.version == kPerfScenesFileVersionV1 &&
-          legacyBank.count == kPerfScenesCount))
-    {
-        clearBank();
-        return false;
+        if (legacyV2.magic[0] == 'P' && legacyV2.magic[1] == 'F' && legacyV2.magic[2] == 'X' &&
+            legacyV2.magic[3] == 'S' && legacyV2.version == kPerfScenesFileVersionV2 &&
+            legacyV2.count == kPerfScenesCount)
+        {
+            clearBank();
+            memcpy(externalRamPerfScenesBank.scenes, legacyV2.scenes, sizeof(legacyV2.scenes));
+            return true;
+        }
     }
 
     clearBank();
-    memcpy(externalRamPerfScenesBank.scenes, legacyBank.scenes, sizeof(legacyBank.scenes));
-    return true;
+    return false;
 }
 
 void PerformanceFxScenes::writeFile(const char* path)
@@ -232,7 +184,6 @@ void PerformanceFxScenes::writeFile(const char* path)
     externalRamPerfScenesBank.magic[3] = 'S';
     externalRamPerfScenesBank.version = kPerfScenesFileVersion;
     externalRamPerfScenesBank.count = kPerfScenesCount;
-    clampSongSlotScenes();
 
     ModuleSidecar::write(
       fileSystem, path, &externalRamPerfScenesBank, sizeof(externalRamPerfScenesBank));
@@ -285,155 +236,6 @@ bool PerformanceFxScenes::recallScene(PerformancePageHost& host, uint8_t idx)
     return true;
 }
 
-void PerformanceFxScenes::assignSlot(uint8_t slot, uint8_t scene)
-{
-    if (slot >= SongListColumn::kSongSlotCount)
-    {
-        return;
-    }
-
-    if (scene > kPerfScenesCount)
-    {
-        scene = kPerfScenesNone;
-    }
-
-    if (externalRamPerfScenesBank.songSlotScene[slot] == scene)
-    {
-        return;
-    }
-
-    externalRamPerfScenesBank.songSlotScene[slot] = scene;
-    saveToWorkspace();
-}
-
-void PerformanceFxScenes::formatCell(uint8_t slot, char* out, uint8_t outSize) const
-{
-    if (out == nullptr || outSize == 0)
-    {
-        return;
-    }
-
-    out[0] = '\0';
-    if (slot >= SongListColumn::kSongSlotCount)
-    {
-        return;
-    }
-
-    const uint8_t value = externalRamPerfScenesBank.songSlotScene[slot];
-    if (value == kPerfScenesNone || value > kPerfScenesCount)
-    {
-        snprintf(out, outSize, "-");
-        return;
-    }
-
-    snprintf(out, outSize, "%u", static_cast<unsigned>(value));
-}
-
-void PerformanceFxScenes::onEncoder(SongScreenHost& host, uint8_t slot, int8_t delta)
-{
-    (void)host;
-    if (slot >= SongListColumn::kSongSlotCount || delta == 0)
-    {
-        return;
-    }
-
-    int16_t value = externalRamPerfScenesBank.songSlotScene[slot];
-    value += delta;
-
-    const int16_t maxValue = kPerfScenesCount;
-    while (value < 0)
-    {
-        value += maxValue + 1;
-    }
-    while (value > maxValue)
-    {
-        value -= maxValue + 1;
-    }
-
-    assignSlot(slot, static_cast<uint8_t>(value));
-}
-
-void PerformanceFxScenes::onClear(SongScreenHost& host, uint8_t slot)
-{
-    (void)host;
-    assignSlot(slot, kPerfScenesNone);
-}
-
-void PerformanceFxScenes::onInserted(uint8_t index, bool duplicate)
-{
-    if (index >= SongListColumn::kSongSlotCount - 1)
-    {
-        return;
-    }
-
-    for (int i = SongListColumn::kSongSlotCount - 1; i > index; i--)
-    {
-        externalRamPerfScenesBank.songSlotScene[i] = externalRamPerfScenesBank.songSlotScene[i - 1];
-    }
-
-    const uint8_t insertAt = static_cast<uint8_t>(index + 1);
-    if (duplicate)
-    {
-        externalRamPerfScenesBank.songSlotScene[insertAt] =
-          externalRamPerfScenesBank.songSlotScene[index];
-    }
-    else
-    {
-        externalRamPerfScenesBank.songSlotScene[insertAt] = kPerfScenesNone;
-    }
-
-    saveToWorkspace();
-}
-
-void PerformanceFxScenes::onRemoved(uint8_t index)
-{
-    if (index >= SongListColumn::kSongSlotCount)
-    {
-        return;
-    }
-
-    for (uint8_t i = index; i < SongListColumn::kSongSlotCount - 1; i++)
-    {
-        externalRamPerfScenesBank.songSlotScene[i] = externalRamPerfScenesBank.songSlotScene[i + 1];
-    }
-    externalRamPerfScenesBank.songSlotScene[SongListColumn::kSongSlotCount - 1] = kPerfScenesNone;
-
-    saveToWorkspace();
-}
-
-void PerformanceFxScenes::clearAll()
-{
-    memset(externalRamPerfScenesBank.songSlotScene,
-           0,
-           sizeof(externalRamPerfScenesBank.songSlotScene));
-    saveToWorkspace();
-}
-
-void PerformanceFxScenes::onSlotStart(uint8_t slot)
-{
-    if (slot >= SongListColumn::kSongSlotCount)
-    {
-        return;
-    }
-
-    const uint8_t scene = externalRamPerfScenesBank.songSlotScene[slot];
-    if (scene == kPerfScenesNone || scene > kPerfScenesCount)
-    {
-        return;
-    }
-
-    PerformancePageHost& host = getPerformancePageHost();
-    if (!recallScene(host, static_cast<uint8_t>(scene - 1)))
-    {
-        return;
-    }
-
-    if (host.isShowingFxRack())
-    {
-        host.refreshFxRack();
-    }
-}
-
 void PerformanceFxScenes::onShow(PerformancePageHost& host)
 {
     refreshPage(host);
@@ -441,7 +243,7 @@ void PerformanceFxScenes::onShow(PerformancePageHost& host)
 
 void PerformanceFxScenes::onHide(PerformancePageHost& host)
 {
-    host.restoreTrackLabels();
+    (void)host;
 }
 
 void PerformanceFxScenes::onScreenButton(PerformancePageHost& host, uint8_t button, uint8_t state)

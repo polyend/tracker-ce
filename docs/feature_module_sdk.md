@@ -20,7 +20,7 @@ This is the third extension path in Tracker CE:
 | :--- | :--- | :--- |
 | **Project sidecar** | `ModuleSidecar` + lifecycle hooks | Module: file format + bank. Firmware: calls open/save/clear. |
 | **Performance Mode page** | `PerformancePage` + `PerformancePageHost` | Module: UI labels + store/recall. Firmware: page cycle + screen buttons. |
-| **Song Mode list column** | `ScreenExtension` / `SongListColumn` + `SongScreenHost` | Module: header, cells, edit, playback. Firmware: layout, navigation, draw dispatch. |
+| **Song Mode list column / mode page** | `ScreenExtension` / `SongListColumn` / `SongModePage` + `SongScreenHost` | Module: column and/or full mode page. Firmware: chrome, menu dots, input dispatch. |
 | **Pattern Step FX** | `PatternStepFxInfo` + `onPatternStepFx` | Module: letter, name, range, behavior. Firmware: runtime FX catalog + sequencer dispatch. |
 
 **Boundary rule:** change core only to grow the **host/dispatcher** surface. Product behavior (scene banks, `"FX"` / `"Scene"` strings, recall logic) stays in the module.
@@ -184,11 +184,14 @@ class PerformancePage
 * `setPageTitle`, `setScreenLabel(index, text, state, text2=nullptr)`, `finishScreenLabels`
   * `PerformanceLabelState`: `Empty` / `Filled` / `Active` / `Muted`
   * `Active` defaults secondary text to `"Active"` when `text2` is omitted
-* `restoreTrackLabels`, `refreshFxRack`, `isShowingFxRack`
+* `restoreTrackLabels`, `refreshFxRack`, `isShowingFxRack`, `isActivePerformancePage`
 * `isShiftPressed`, `tracksPage`, `isSampleTrackMuted`, `isMidiTrackMuted`
 * `captureFxScene` / `recallFxScene` (`strPerfScene` — 12 FX slots)
 * `capturePatternScene` / `recallPatternScene` (`strPatternScene`)
 * `captureMuteScene` / `recallMuteScene` (`strMuteScene`)
+* Engine FX catalog / apply (usable **without** a Performance page): `performanceFxCount`, `performanceFxName`, `performanceFxMin` / `Max`, `applyPerformanceFx`, `clearPerformanceFx`
+
+`onHide` must **not** call `restoreTrackLabels` — firmware restores the track strip only when leaving module pages entirely. Page-to-page cycling calls `onHide` then the next page’s `onShow`.
 
 Controls:
 
@@ -196,13 +199,13 @@ Controls:
 * Tracker Mini: **Middle** cycles the same way
 * Screen buttons `0`–`7` → `onScreenButton`
 
-Typical pattern: Shift + button stores; button alone recalls. Use `isShowingFxRack()` before refreshing the rack after an external recall (e.g. song-row or pattern FX).
+Typical pattern: Shift + button stores; button alone recalls. **Never** call display helpers from `onPatternStepFx` / `onSlotStart` — apply engine state only.
 
 New top-level screens still use `ModuleBase` and the fixed `Interface::modules[]` table (slot `11` reserved for firmware).
 
 ---
 
-## 7. Screen extensions — Song list column
+## 7. Screen extensions — Song Mode
 
 Feature modules extend **existing** `ModuleBase` screens through `screenExtension()`. They do not add top-level screens.
 
@@ -214,7 +217,7 @@ class ScreenExtension
   public:
     virtual ScreenId screen() const = 0;
     virtual SongListColumn* asSongListColumn() { return nullptr; }
-    // Future screens add as*() accessors here.
+    virtual SongModePage* asSongModePage() { return nullptr; }
 };
 ```
 
@@ -230,12 +233,30 @@ One optional focusable column on the Song playlist (between pattern list and tem
 | `onInserted` / `onRemoved` / `clearAll` | Stay aligned with Add/Delete Slot and MOD/IT import |
 | `onSlotStart` | Main-thread hook when song playback enters a row |
 
+### Song mode page
+
+Optional full page under **Song** (PerformancePage-style). Implements Mini-menu mode **and** page UI/input via `SongModePage` / `asSongModePage()` — **do not** edit `interfaceMenuPopup.cpp` or put product logic in `fSongEdit.cpp`.
+
+| Module API | Role |
+| :--- | :--- |
+| `startOption()` | Passed to `cSongEditor::start()` (`>= 2`; `0` = dismiss preserve, `1` = playlist) |
+| `canOpen` / `onShow` / `onHide` / `onBack` | Enter / leave |
+| `onEncoder` | Encoder and Mini +/- |
+| `onScreenButton` | Soft buttons `0`–`7` |
+| `onNavigate` | Up/Down; default no-op |
+| `onHorizontalNavigate` | Left/Right; default no-op |
+| `onClearFocused` | Delete; default no-op |
+
+Song firmware only: hide playlist / show param-value list chrome, bind inputs, dispatch to `activeModePage`. Menu dots come from `menuModeCount` / `menuModeOption` (playlist + registered pages; no dots if none).
+
+Host helpers: `openModePage` / `closeModePage` / `isModePageOpen`, `setEditorTitle`, `setScreenLabel` / `finishScreenLabels`, `setEditorListCount` / `setEditorListRow` / `setEditorListFocus`, `refreshEditor`.
+
 Firmware helpers (modules do not call these; Song/FileManager/registry do):
 
 * `pollSongListColumnSlotStarts()` — from `updateAll()`; latches `playlistPos` and calls `onSlotStart`
 * `notifySongPlaylistReplaced()` — MOD/IT import clears column data via `clearAll()`
 
-`getSongListColumn()` returns the **first** Song extension that exposes a column (`MODULE_ORDER`). Today the host supports **zero or one** column; multi-column packing is a future host change (module `SongListColumn` API stays the same).
+`getSongListColumn()` / `getSongModePage(i)` return Song extensions (`MODULE_ORDER`). Today the host supports **zero or one** column and **zero or more** mode pages (one active at a time).
 
 `SongListColumn::kSongSlotCount` must match `SONG_MAX` (255).
 
@@ -254,7 +275,7 @@ struct PatternStepFxInfo
 {
     uint8_t typeId;       // stored in the pattern; stable across builds
     char letter;          // picker glyph, e.g. 'N'
-    const char* name;     // host formats "N - Perf FX Scene"
+    const char* name;     // host formats "N - FX Scene"
     const char* shortName;
     const char* description;
     uint8_t minValue;
@@ -306,11 +327,12 @@ bool onPatternStepFx(uint8_t typeId, uint8_t value) override
 
 | Directory | What it adds | `id()` / sidecar | `MODULE_ORDER` |
 | :--- | :--- | :--- | ---: |
-| [`performance-fx-scenes/`](../feature-modules/performance-fx-scenes) | Performance page **Scenes**; Song column **FX**; pattern FX **N - Perf FX Scene** (id 128, values 1–8) | `perfscenes` | 10 |
+| [`performance-fx-scenes/`](../feature-modules/performance-fx-scenes) | Performance page **Scenes** (rack snapshots) | `perfscenes` | 10 |
 | [`pattern-launch-scenes/`](../feature-modules/pattern-launch-scenes) | Performance page **Patterns** | `patternscenes` | 20 |
 | [`mute-banks/`](../feature-modules/mute-banks) | Performance page **Mutes** | `mutebanks` | 30 |
+| [`fx-list-scenes/`](../feature-modules/fx-list-scenes) | Song column **FX**; Song menu FX page; pattern FX **N - FX Scene** (id 128, values 1–8) | `fxlistscenes` | 15 |
 
-All three use only SDK headers + `ModuleSidecar` + hosts. Shift + screen button stores; screen button recalls.
+Bundled modules use only SDK headers + `ModuleSidecar` + hosts.
 
 ---
 

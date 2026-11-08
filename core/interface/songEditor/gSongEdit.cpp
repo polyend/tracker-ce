@@ -2,6 +2,7 @@
 
 #include "FeatureModuleRegistry.h"
 #include "Platform.h"
+#include "ScreenHost.h"
 #include "mtSequencer.h"
 #include "string.h"
 
@@ -129,10 +130,43 @@ void cSongEditor::initDisplayControls()
       (display.getTheme().bottomScreenShadow > 0 ? controlStyleBottomShadow : 0);
 
     songPlayerControl = display.createControl<cSongPlayer>(&prop);
+
+    for (uint8_t i = 0; i < kModePageListRows; i++)
+    {
+        modePageParamNamePtrs[i] = modePageParamNames[i];
+        modePageParamValuePtrs[i] = modePageParamValues[i];
+        modePageParamNames[i][0] = '\0';
+        modePageParamValues[i][0] = '\0';
+    }
+
+    modePageList.linesCount = kModePageListRows;
+    modePageList.start = 0;
+    modePageList.length = kModePageListRows;
+    modePageList.params = modePageParamNamePtrs;
+    modePageList.values = modePageParamValuePtrs;
+    modePageList.valueEditActive = 0;
+
+    strControlProperties listProp;
+    listProp.style = controlStyleFont1 | controlStyleBackground |
+                     (display.getTheme().bottomScreenShadow > 0 ? controlStyleBottomShadow : 0);
+    listProp.x = 0 + 1;
+    listProp.y = 29;
+    listProp.w = 800 - 2;
+    listProp.h = 394;
+    listProp.value = 0;
+    listProp.colors = display.getTheme().activeListColors;
+    listProp.data = &modePageList;
+    modePageListControl = display.createControl<cParamValueList>(&listProp);
 }
 
 void cSongEditor::refreshTempoField()
 {
+    if (isModePageOpen())
+    {
+        showTempoValue();
+        return;
+    }
+
     if (tapTempoActive && tapTempoCount > 1)
     {
         memset(tapText, 0, sizeof(tapText));
@@ -443,6 +477,14 @@ void cSongEditor::activateLabelsBorder()
 
 void cSongEditor::showTempoValue()
 {
+    // FX List page owns the right column + soft button 8; keep tempo chrome hidden.
+    if (isModePageOpen())
+    {
+        display.setControlHide(barControl);
+        display.refreshControl(barControl);
+        return;
+    }
+
     if (sequencer.isSetInternalClock())
     {
         sprintf(globalTempoVal, "%.1f BPM", mtProject.values.globalTempo);
@@ -488,4 +530,131 @@ void cSongEditor::hideIcon()
 
     // display.setControlValue(songPlayerControl, selectedPattern);
     display.refreshControl(songPlayerControl);
+}
+
+void cSongEditor::showModePageScreen()
+{
+    titleBar->show();
+
+    display.setControlHide(songPlayerControl);
+    display.setControlHide(frameControl);
+    display.setControlHide(barControl);
+    display.refreshControl(songPlayerControl);
+
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        display.setControlStyle2(label[i],
+                                 controlStyleCenterX | controlStyleCenterY | controlStyleFont3);
+        display.setControlValue(label[i], 1);
+        display.setControlShow(label[i]);
+        display.refreshControl(label[i]);
+    }
+
+    display.setControlShow(bgLabel);
+    display.refreshControl(bgLabel);
+
+    display.setControlData(modePageListControl, &modePageList);
+    display.setControlValue(modePageListControl, 0);
+    display.setControlShow(modePageListControl);
+    display.refreshControl(modePageListControl);
+
+    display.synchronizeRefresh();
+}
+
+void cSongEditor::hideModePageScreen()
+{
+    display.setControlHide(modePageListControl);
+    display.refreshControl(modePageListControl);
+}
+
+void cSongEditor::setModePageTitle(const char* title)
+{
+    titleBar->show();
+    titleBar->setTitle(title != nullptr ? title : "");
+}
+
+void cSongEditor::setModePageLine(uint8_t row, const char* text)
+{
+    (void)row;
+    (void)text;
+}
+
+void cSongEditor::setModePageScreenLabel(uint8_t index,
+                                            const char* text,
+                                            uint8_t state,
+                                            const char* text2)
+{
+    if (index >= 8)
+    {
+        return;
+    }
+
+    const uint32_t* colors = display.getTheme().inactiveLabelsColors;
+    if (state == static_cast<uint8_t>(SongEditorLabelState::Active))
+    {
+        colors = display.getTheme().performActiveTrackLabelsColors;
+    }
+    else if (state == static_cast<uint8_t>(SongEditorLabelState::Filled))
+    {
+        colors = display.getTheme().performActiveTrackLabelsColors;
+    }
+
+    display.setControlColors(label[index], colors);
+    display.setControlText(label[index], text != nullptr ? text : "");
+    display.setControlText2(label[index], text2 != nullptr ? (char*)text2 : (char*)"");
+    display.setControlStyle(label[index],
+                            controlStyleCenterX | controlStyleCenterY | controlStyleFont3);
+    display.setControlShow(label[index]);
+    display.refreshControl(label[index]);
+}
+
+void cSongEditor::finishModePageLabels()
+{
+    display.synchronizeRefresh();
+}
+
+void cSongEditor::setModePageListCount(uint8_t count)
+{
+    if (count > kModePageListRows)
+    {
+        count = kModePageListRows;
+    }
+    modePageList.length = count;
+    modePageList.linesCount = count > 0 ? count : 1;
+    modePageList.params = modePageParamNamePtrs;
+    modePageList.values = modePageParamValuePtrs;
+}
+
+void cSongEditor::setModePageListRow(uint8_t index, const char* name, const char* value)
+{
+    if (index >= kModePageListRows)
+    {
+        return;
+    }
+
+    snprintf(modePageParamNames[index],
+             kModePageListNameLen,
+             "%s",
+             name != nullptr ? name : "");
+    snprintf(modePageParamValues[index],
+             kModePageListValueLen,
+             "%s",
+             value != nullptr ? value : "");
+}
+
+void cSongEditor::setModePageListFocus(uint8_t index, bool editingValue)
+{
+    modePageList.start = index;
+    modePageList.valueEditActive = editingValue ? 1 : 0;
+    display.setControlData(modePageListControl, &modePageList);
+    display.setControlValue(modePageListControl, index);
+    display.setControlShow(modePageListControl);
+    display.refreshControl(modePageListControl);
+}
+
+void cSongEditor::refreshModePage()
+{
+    display.setControlData(modePageListControl, &modePageList);
+    display.refreshControl(modePageListControl);
+    display.synchronizeRefresh();
 }

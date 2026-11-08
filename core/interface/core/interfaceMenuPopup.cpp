@@ -25,11 +25,49 @@ InterfaceMenuPopup::ModuleModes masterModes = { 3, masterOptions, { 3, 0 } };
 uint32_t performOptions[2] = { 1, 2 };
 InterfaceMenuPopup::ModuleModes performModes = { 2, performOptions, { 2, 0 } };
 
+// Dynamic Mini-menu modes from ModuleBase::menuModeCount/Option (e.g. Song + feature modules).
+static constexpr uint8_t kMaxDynamicMenuModes = 8;
+static uint32_t dynamicModeOptions[kMenuModulesCount][kMaxDynamicMenuModes];
+static InterfaceMenuPopup::ModuleModes dynamicModes[kMenuModulesCount];
+
+static InterfaceMenuPopup::ModuleModes* resolveModuleModes(uint8_t moduleIdx)
+{
+    const InterfaceMenuPopup::ModuleRef& ref = InterfaceMenuPopup::modules[moduleIdx];
+    if (ref.modes != nullptr)
+    {
+        return ref.modes;
+    }
+
+    if (ref.module == nullptr)
+    {
+        return nullptr;
+    }
+
+    const uint8_t count = ref.module->menuModeCount();
+    if (count == 0)
+    {
+        return nullptr;
+    }
+
+    const uint8_t clamped = count > kMaxDynamicMenuModes ? kMaxDynamicMenuModes : count;
+    for (uint8_t i = 0; i < clamped; i++)
+    {
+        dynamicModeOptions[moduleIdx][i] = ref.module->menuModeOption(i);
+    }
+
+    dynamicModes[moduleIdx].count = clamped;
+    dynamicModes[moduleIdx].options = dynamicModeOptions[moduleIdx];
+    dynamicModes[moduleIdx].modes.count = clamped;
+    dynamicModes[moduleIdx].modes.current = ref.module->getCurrentModeIdx();
+    return &dynamicModes[moduleIdx];
+}
+
 const InterfaceMenuPopup::ModuleRef InterfaceMenuPopup::modules[kMenuModulesCount] = {
     { mtInterface.modules[2], interfaceButtonPattern, 0, nullptr },
     { mtInterface.modules[5], interfaceButtonParams, 0, &instrumentParamModes },
     { mtInterface.modules[3], interfaceButtonSamplePlay, 0, nullptr },
     { mtInterface.modules[12], interfaceButtonMaster, 0, &masterModes },
+    // Song modes come from cSongEditor::menuModeCount (playlist + SongModePage modules).
     { mtInterface.modules[4], interfaceButtonSong, 0, nullptr },
     { mtInterface.modules[1], interfaceButtonSampleLoad, 0, nullptr },
     { mtInterface.modules[0], interfaceButtonFile, 0, nullptr },
@@ -120,11 +158,11 @@ void InterfaceMenuPopup::showModulePopup(ModuleBase* sourceModule,
         }
 
         modulesMenuTexts[box] = kModuleNamesList[menuFunctions[box]];
-        if (modules[menuFunctions[box]].modes != nullptr)
+        InterfaceMenuPopup::ModuleModes* modes = resolveModuleModes(menuFunctions[box]);
+        if (modes != nullptr)
         {
-            modules[menuFunctions[box]].modes->modes.current =
-              modules[menuFunctions[box]].module->getCurrentModeIdx();
-            modulesMenuModes[box] = &modules[menuFunctions[box]].modes->modes;
+            modes->modes.current = modules[menuFunctions[box]].module->getCurrentModeIdx();
+            modulesMenuModes[box] = &modes->modes;
         }
         else
         {
@@ -299,37 +337,39 @@ void InterfaceMenuPopup::changeModuleMode()
 {
     ModuleBase* destModule = sourceModule;
     uint32_t options = 0;
-    bool srcIsDst = modules[menuFunctions[selectedBox]].module == sourceModule;
-    bool destHasModes = modules[menuFunctions[selectedBox]].modes != nullptr;
+    const uint8_t moduleIdx = menuFunctions[selectedBox];
+    bool srcIsDst = modules[moduleIdx].module == sourceModule;
+    InterfaceMenuPopup::ModuleModes* modes = resolveModuleModes(moduleIdx);
+    bool destHasModes = modes != nullptr;
 
     if (srcIsDst)
     {
         if (destHasModes)
         {
-            int optionsIdx = modules[menuFunctions[selectedBox]].modes->modes.current + 1;
-            if (optionsIdx >= modules[menuFunctions[selectedBox]].modes->modes.count)
+            int optionsIdx = modes->modes.current + 1;
+            if (optionsIdx >= modes->modes.count)
             {
                 optionsIdx = 0;
             }
-            options = modules[menuFunctions[selectedBox]].modes->options[optionsIdx];
+            options = modes->options[optionsIdx];
         }
         else
         {
             if (switchModuleCallback != nullptr)
             {
-                uint8_t moduleToSwitch = modules[menuFunctions[selectedBox]].button;
+                uint8_t moduleToSwitch = modules[moduleIdx].button;
                 switchModuleCallback(moduleToSwitch);
                 switchModuleCallback = nullptr;
             }
             else
             {
-                sourceModule->start(modules[menuFunctions[selectedBox]].defaultOption);
+                sourceModule->start(modules[moduleIdx].defaultOption);
             }
         }
 
         if (switchModuleCallback != nullptr)
         {
-            uint8_t moduleToSwitch = modules[menuFunctions[selectedBox]].button;
+            uint8_t moduleToSwitch = modules[moduleIdx].button;
             switchModuleCallback(moduleToSwitch);
             switchModuleCallback = nullptr;
         }
@@ -342,15 +382,15 @@ void InterfaceMenuPopup::changeModuleMode()
     {
         if (destHasModes)
         {
-            int optionsIdx = modules[menuFunctions[selectedBox]].modes->modes.current;
-            options = modules[menuFunctions[selectedBox]].modes->options[optionsIdx];
+            int optionsIdx = modes->modes.current;
+            options = modes->options[optionsIdx];
         }
         else
         {
-            options = modules[menuFunctions[selectedBox]].defaultOption;
+            options = modules[moduleIdx].defaultOption;
         }
-        destModule = modules[menuFunctions[selectedBox]].module;
-        uint8_t moduleToSwitchButton = modules[menuFunctions[selectedBox]].button;
+        destModule = modules[moduleIdx].module;
+        uint8_t moduleToSwitchButton = modules[moduleIdx].button;
 
         if (switchModuleCallback != nullptr)
         {

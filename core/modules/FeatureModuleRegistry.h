@@ -31,6 +31,13 @@ class FeatureModuleRegistry
     // First Song list-column extension, or nullptr.
     SongListColumn* getSongListColumn() const;
 
+    // Song Mini-menu mode pages contributed by feature modules (after playlist).
+    uint8_t songModePageCount() const;
+    SongModePage* getSongModePage(uint8_t index) const;
+    SongModePage* findSongModePageByOption(uint32_t option) const;
+    // Menu index for option (1..), or 0 if not found / playlist.
+    uint8_t songModeIndexForOption(uint32_t option) const;
+
     // Pattern Step FX catalog collected at initAll.
     uint8_t patternStepFxCount() const { return patternFxCount; }
     const PatternStepFxInfo* patternStepFxAt(uint8_t index) const;

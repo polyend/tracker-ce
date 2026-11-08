@@ -108,8 +108,9 @@ void MuteBanks::refreshPage(PerformancePageHost& host)
 
     if (activeSlot < kMuteBanksCount)
     {
-        char titleBuf[24];
-        snprintf(titleBuf, sizeof(titleBuf), "Mutes · %u", static_cast<unsigned>(activeSlot + 1));
+        // TitleBar stores a pointer — keep this buffer stable.
+        static char titleBuf[24];
+        snprintf(titleBuf, sizeof(titleBuf), "Mutes - %u", static_cast<unsigned>(activeSlot + 1));
         host.setPageTitle(titleBuf);
     }
     else
@@ -239,7 +240,7 @@ void MuteBanks::onShow(PerformancePageHost& host)
 
 void MuteBanks::onHide(PerformancePageHost& host)
 {
-    host.restoreTrackLabels();
+    (void)host;
 }
 
 void MuteBanks::onScreenButton(PerformancePageHost& host, uint8_t button, uint8_t state)

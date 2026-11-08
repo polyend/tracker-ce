@@ -4,17 +4,19 @@ External compile-time modules for Tracker CE. Each directory is a self-contained
 
 ## Bundled modules
 
-| Directory | Page title | Sidecar | Cycle order |
+| Directory | UI | Sidecar | Order |
 | :--- | :--- | :--- | ---: |
-| [`performance-fx-scenes/`](performance-fx-scenes/README.md) | Scenes | `perfscenes.bin` | 10 |
-| [`pattern-launch-scenes/`](pattern-launch-scenes/README.md) | Patterns | `patternscenes.bin` | 20 |
-| [`mute-banks/`](mute-banks/README.md) | Mutes | `mutebanks.bin` | 30 |
+| [`performance-fx-scenes/`](performance-fx-scenes/README.md) | Perf page **Scenes** | `perfscenes.bin` | 10 |
+| [`fx-list-scenes/`](fx-list-scenes/README.md) | Song FX column + editor | `fxlistscenes.bin` | 15 |
+| [`pattern-launch-scenes/`](pattern-launch-scenes/README.md) | Perf page **Patterns** | `patternscenes.bin` | 20 |
+| [`mute-banks/`](mute-banks/README.md) | Perf page **Mutes** | `mutebanks.bin` | 30 |
 
-In Performance Mode, **Shift + Performance** (desktop) or **Middle** (Mini) cycles these pages in `MODULE_ORDER`, then returns to the track strip.
+In Performance Mode, **Shift + Performance** (desktop) or **Middle** (Mini) cycles Performance pages in `MODULE_ORDER`, then returns to the track strip.
 
-| Page | Store | Recall |
+| Feature | Store / edit | Recall / apply |
 | :--- | :--- | :--- |
 | Scenes | Shift + screen button | Screen button — FX rack snapshot |
+| FX List | Song FX column + Insert editor | Song row start / Pattern FX `N` |
 | Patterns | Shift + screen button | Screen button — per-track pattern cues |
 | Mutes | Shift + screen button | Screen button — sample + MIDI mute masks |
 

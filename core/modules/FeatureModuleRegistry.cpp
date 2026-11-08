@@ -130,6 +130,99 @@ SongListColumn* FeatureModuleRegistry::getSongListColumn() const
     return nullptr;
 }
 
+uint8_t FeatureModuleRegistry::songModePageCount() const
+{
+    uint8_t pages = 0;
+    for (uint8_t i = 0; i < moduleCount; i++)
+    {
+        ScreenExtension* extension = modules[i]->screenExtension();
+        if (extension == nullptr || extension->screen() != ScreenId::Song)
+        {
+            continue;
+        }
+        if (extension->asSongModePage() != nullptr)
+        {
+            pages++;
+        }
+    }
+    return pages;
+}
+
+SongModePage* FeatureModuleRegistry::getSongModePage(uint8_t index) const
+{
+    uint8_t pages = 0;
+    for (uint8_t i = 0; i < moduleCount; i++)
+    {
+        ScreenExtension* extension = modules[i]->screenExtension();
+        if (extension == nullptr || extension->screen() != ScreenId::Song)
+        {
+            continue;
+        }
+
+        SongModePage* page = extension->asSongModePage();
+        if (page == nullptr)
+        {
+            continue;
+        }
+        if (pages == index)
+        {
+            return page;
+        }
+        pages++;
+    }
+    return nullptr;
+}
+
+SongModePage* FeatureModuleRegistry::findSongModePageByOption(uint32_t option) const
+{
+    for (uint8_t i = 0; i < moduleCount; i++)
+    {
+        ScreenExtension* extension = modules[i]->screenExtension();
+        if (extension == nullptr || extension->screen() != ScreenId::Song)
+        {
+            continue;
+        }
+
+        SongModePage* page = extension->asSongModePage();
+        if (page != nullptr && page->startOption() == option)
+        {
+            return page;
+        }
+    }
+    return nullptr;
+}
+
+uint8_t FeatureModuleRegistry::songModeIndexForOption(uint32_t option) const
+{
+    // Menu index 0 = playlist (option 1). Feature pages start at index 1.
+    if (option == 1)
+    {
+        return 0;
+    }
+
+    uint8_t pages = 0;
+    for (uint8_t i = 0; i < moduleCount; i++)
+    {
+        ScreenExtension* extension = modules[i]->screenExtension();
+        if (extension == nullptr || extension->screen() != ScreenId::Song)
+        {
+            continue;
+        }
+
+        SongModePage* page = extension->asSongModePage();
+        if (page == nullptr)
+        {
+            continue;
+        }
+        if (page->startOption() == option)
+        {
+            return static_cast<uint8_t>(pages + 1);
+        }
+        pages++;
+    }
+    return 0;
+}
+
 bool FeatureModuleRegistry::isPatternStepFxLetterTaken(char letter) const
 {
     for (uint8_t i = 0; i < patternFxCount; i++)

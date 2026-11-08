@@ -47,7 +47,7 @@ Empty slots do nothing on recall.
 
 ### Active slot UI
 
-After a recall, the title shows which bank is live (`Patterns · 2`) and that soft button uses the **Active** label state.
+After a recall, the title shows which bank is live (`Patterns - 2`) and that soft button uses the **Active** label state.
 
 ## On disk
 

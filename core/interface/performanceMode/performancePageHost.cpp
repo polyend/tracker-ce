@@ -89,6 +89,11 @@ class PerformancePageHostImpl : public PerformancePageHost
                !performanceMode.isPerformancePageActive();
     }
 
+    bool isActivePerformancePage(const PerformancePage* page) const override
+    {
+        return page != nullptr && performanceMode.getActivePerformancePage() == page;
+    }
+
     bool isShiftPressed() const override
     {
         return performanceMode.buttons->isButtonPressed(interfaceButtonShift);
@@ -179,6 +184,24 @@ class PerformancePageHostImpl : public PerformancePageHost
         newFileManager.setProjectStructChanged();
         performanceMode.refreshTrackState = 1;
     }
+
+    uint8_t performanceFxCount() const override { return performance.getFxCount(); }
+
+    const char* performanceFxName(uint8_t fxId) const override
+    {
+        return performance.getFxName(fxId);
+    }
+
+    int16_t performanceFxMin(uint8_t fxId) const override { return performance.getFxMin(fxId); }
+
+    int16_t performanceFxMax(uint8_t fxId) const override { return performance.getFxMax(fxId); }
+
+    void applyPerformanceFx(uint8_t fxId, int16_t value) override
+    {
+        performance.applyFx(fxId, value);
+    }
+
+    void clearPerformanceFx(uint8_t fxId) override { performance.clearFx(fxId); }
 };
 
 static PerformancePageHostImpl s_performancePageHost;

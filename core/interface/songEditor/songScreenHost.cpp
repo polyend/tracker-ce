@@ -2,8 +2,10 @@
 
 #include "FeatureModuleRegistry.h"
 #include "core/interfaceDefs.h"
+#include "display.h"
 #include "mtSequencer.h"
 #include "songEditor/songEditor.h"
+#include "titleBar.h"
 
 class SongScreenHostImpl : public SongScreenHost
 {
@@ -21,6 +23,55 @@ class SongScreenHostImpl : public SongScreenHost
     }
 
     void refreshColumn() override { songEditor.refreshSongPlayerSelectedSlot(); }
+
+    void openModePage() override
+    {
+        if (songEditor.getActiveModePage() != nullptr)
+        {
+            return;
+        }
+        if (featureModules.songModePageCount() == 0)
+        {
+            return;
+        }
+        songEditor.showModePage(featureModules.getSongModePage(0));
+    }
+
+    void closeModePage() override { songEditor.hideModePage(); }
+
+    bool isModePageOpen() const override { return songEditor.isModePageOpen(); }
+
+    void setEditorTitle(const char* title) override { songEditor.setModePageTitle(title); }
+
+    void setEditorLine(uint8_t row, const char* text) override
+    {
+        songEditor.setModePageLine(row, text);
+    }
+
+    void setScreenLabel(uint8_t index,
+                        const char* text,
+                        SongEditorLabelState state,
+                        const char* text2) override
+    {
+        songEditor.setModePageScreenLabel(
+          index, text, static_cast<uint8_t>(state), text2);
+    }
+
+    void finishScreenLabels() override { songEditor.finishModePageLabels(); }
+
+    void setEditorListCount(uint8_t count) override { songEditor.setModePageListCount(count); }
+
+    void setEditorListRow(uint8_t index, const char* name, const char* value) override
+    {
+        songEditor.setModePageListRow(index, name, value);
+    }
+
+    void setEditorListFocus(uint8_t index, bool editingValue) override
+    {
+        songEditor.setModePageListFocus(index, editingValue);
+    }
+
+    void refreshEditor() override { songEditor.refreshModePage(); }
 };
 
 static SongScreenHostImpl s_songScreenHost;

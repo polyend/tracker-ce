@@ -50,7 +50,7 @@ Empty slots do nothing on recall. After you leave the page, the track strip mute
 
 ### Active slot + live mute overview
 
-- After a recall, the title shows which bank is live (`Mutes · 1`) and that soft button uses the **Active** label state.
+- After a recall, the title shows which bank is live (`Mutes - 1`) and that soft button uses the **Active** label state.
 - Each soft button’s secondary line shows live **Mute** / **Unmute** for the matching track on the current sample or MIDI page (`tracksPage()`).
 - Muted tracks use muted label colors unless that bank is the active one.
 

@@ -108,8 +108,9 @@ void PatternLaunchScenes::refreshPage(PerformancePageHost& host)
 
     if (activeSlot < kPatternScenesCount)
     {
-        char titleBuf[24];
-        snprintf(titleBuf, sizeof(titleBuf), "Patterns · %u", static_cast<unsigned>(activeSlot + 1));
+        // TitleBar stores a pointer — keep this buffer stable.
+        static char titleBuf[24];
+        snprintf(titleBuf, sizeof(titleBuf), "Patterns - %u", static_cast<unsigned>(activeSlot + 1));
         host.setPageTitle(titleBuf);
     }
     else
@@ -227,7 +228,7 @@ void PatternLaunchScenes::onShow(PerformancePageHost& host)
 
 void PatternLaunchScenes::onHide(PerformancePageHost& host)
 {
-    host.restoreTrackLabels();
+    (void)host;
 }
 
 void PatternLaunchScenes::onScreenButton(PerformancePageHost& host, uint8_t button, uint8_t state)

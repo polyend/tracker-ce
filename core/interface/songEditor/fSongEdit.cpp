@@ -67,6 +67,14 @@ static void functUndo();
 static void functDelete();
 static void refreshDeleting();
 
+static void functModePageButton(uint8_t button, uint8_t state);
+static void functModePageBack();
+static void functModePageUp();
+static void functModePageDown();
+static void functModePageLeft();
+static void functModePageRight();
+static void functModePageDelete();
+
 void playSongFromSelectedPattern();
 void playSongFromSelectedPattern_stop();
 
@@ -143,6 +151,29 @@ void cSongEditor::update()
     refreshDeleting();
 }
 
+uint8_t cSongEditor::menuModeCount()
+{
+    // No feature SongModePage => no Mini dots (playlist only, same as stock Song).
+    const uint8_t extra = featureModules.songModePageCount();
+    if (extra == 0)
+    {
+        return 0;
+    }
+    // Index 0 = playlist; following indices are SongModePage contributions.
+    return static_cast<uint8_t>(1 + extra);
+}
+
+uint32_t cSongEditor::menuModeOption(uint8_t index)
+{
+    if (index == 0)
+    {
+        return 1; // playlist
+    }
+
+    SongModePage* page = featureModules.getSongModePage(static_cast<uint8_t>(index - 1));
+    return page != nullptr ? page->startOption() : 1;
+}
+
 void cSongEditor::start(uint32_t options)
 {
     moduleRefresh = 1;
@@ -151,6 +182,34 @@ void cSongEditor::start(uint32_t options)
 
     pressedSongButton = false;
     exitOnButtonRelease = 0;
+
+    SongModePage* pendingPage = nullptr;
+
+    // Mini menu: option 0 preserves page on dismiss; 1 = playlist; >=2 = SongModePage.
+    if (options == 0)
+    {
+        // keep songViewPage / activeModePage
+    }
+    else if (options == 1)
+    {
+        if (activeModePage != nullptr)
+        {
+            hideModePage();
+        }
+        songViewPage = 0;
+    }
+    else
+    {
+        pendingPage = featureModules.findSongModePageByOption(options);
+        if (pendingPage != nullptr)
+        {
+            songViewPage = featureModules.songModeIndexForOption(options);
+        }
+        else
+        {
+            songViewPage = 0;
+        }
+    }
 
     newFileManager.updateActualPatternBitmask();
     readSong();
@@ -173,18 +232,114 @@ void cSongEditor::start(uint32_t options)
     ip->setButtonObj(interfaceButtonMiniMenu, functMenu);
 
     refreshEditMode();
-    showDefaultScreen();
-    setDefaultScreenFunct();
+
+    if (pendingPage != nullptr)
+    {
+        showModePage(pendingPage);
+    }
+    else if (activeModePage != nullptr && songViewPage != 0)
+    {
+        bindModePageButtons();
+        activeModePage->onShow(getSongScreenHost());
+    }
+    else
+    {
+        showDefaultScreen();
+        setDefaultScreenFunct();
+    }
 
     lightUpPadBoard();
 }
 
 void cSongEditor::stop()
 {
+    if (activeModePage != nullptr)
+    {
+        hideModePage();
+    }
+
     sequencer.stopManualNotes();
     cleanPatternsListResources();
 
     moduleRefresh = 0;
+}
+
+void cSongEditor::showModePage(SongModePage* page)
+{
+    if (page == nullptr)
+    {
+        songViewPage = 0;
+        return;
+    }
+
+    SongScreenHost& host = getSongScreenHost();
+    if (!page->canOpen(host))
+    {
+        songViewPage = 0;
+        return;
+    }
+
+    if (activeModePage != nullptr && activeModePage != page)
+    {
+        activeModePage->onHide(host);
+        hideModePageScreen();
+    }
+
+    activeModePage = page;
+    if (songViewPage == 0)
+    {
+        songViewPage = 1;
+    }
+    showModePageScreen();
+    bindModePageButtons();
+    page->onShow(host);
+}
+
+void cSongEditor::hideModePage()
+{
+    if (activeModePage == nullptr)
+    {
+        return;
+    }
+
+    activeModePage->onHide(getSongScreenHost());
+    hideModePageScreen();
+    activeModePage = nullptr;
+    songViewPage = 0;
+    setDefaultScreenFunct();
+    showDefaultScreen();
+    activateLabelsBorder();
+}
+
+void cSongEditor::bindModePageButtons()
+{
+    ip->clearButtonsRange(interfaceButton0, interfaceButton7);
+    ip->setButtonObj(interfaceButton0, functModePageButton);
+    ip->setButtonObj(interfaceButton1, functModePageButton);
+    ip->setButtonObj(interfaceButton2, functModePageButton);
+    ip->setButtonObj(interfaceButton3, functModePageButton);
+    ip->setButtonObj(interfaceButton4, functModePageButton);
+    ip->setButtonObj(interfaceButton5, functModePageButton);
+    ip->setButtonObj(interfaceButton6, functModePageButton);
+    ip->setButtonObj(interfaceButton7, functModePageButton);
+    ip->setPotObj(interfacePot0, functEncoder, false);
+    ip->setButtonObj(interfaceButtonUp, buttonPress, functModePageUp);
+    ip->setButtonObj(interfaceButtonDown, buttonPress, functModePageDown);
+    ip->setButtonObj(interfaceButtonLeft, buttonPress, functModePageLeft);
+    ip->setButtonObj(interfaceButtonRight, buttonPress, functModePageRight);
+    ip->setButtonObj(interfaceButtonDelete, buttonPress, functModePageDelete);
+    ip->setButtonObj(interfaceButtonInsert, buttonPress, functModePageBack);
+    ip->setButtonObj(interfaceButtonMiniMenu, functMenu);
+}
+
+void cSongEditor::handleModePageEncoder(int8_t delta)
+{
+    if (activeModePage == nullptr || delta == 0)
+    {
+        return;
+    }
+
+    activeModePage->onEncoder(getSongScreenHost(), delta);
 }
 
 void cSongEditor::setDefaultScreenFunct()
@@ -679,6 +834,13 @@ static void functEncoder(int16_t value)
 {
     if (SE->isBusy)
     {
+        return;
+    }
+
+    if (SE->activeModePage != nullptr)
+    {
+        const int8_t step = value > 0 ? 1 : (value < 0 ? -1 : 0);
+        SE->handleModePageEncoder(step);
         return;
     }
 
@@ -1757,7 +1919,92 @@ static void functInsert()
             case 0: SE->walkOnSongPlayer(playerHome); break;
             case 1: SE->changeSongPositionSelection(-300); break;
         }
+        return;
     }
+
+    // Open first SongModePage when none is active (Insert shortcut).
+    if (SE->activeModePage == nullptr && featureModules.songModePageCount() > 0)
+    {
+        SE->showModePage(featureModules.getSongModePage(0));
+    }
+}
+
+static void functModePageButton(uint8_t button, uint8_t state)
+{
+    SongModePage* page = SE->getActiveModePage();
+    if (page == nullptr)
+    {
+        return;
+    }
+
+    page->onScreenButton(getSongScreenHost(), button, state);
+}
+
+static void functModePageBack()
+{
+    SongModePage* page = SE->getActiveModePage();
+    if (page == nullptr)
+    {
+        return;
+    }
+
+    page->onBack(getSongScreenHost());
+    SE->hideModePage();
+}
+
+static void functModePageUp()
+{
+    SongModePage* page = SE->getActiveModePage();
+    if (page == nullptr)
+    {
+        return;
+    }
+
+    page->onNavigate(getSongScreenHost(), -1);
+}
+
+static void functModePageDown()
+{
+    SongModePage* page = SE->getActiveModePage();
+    if (page == nullptr)
+    {
+        return;
+    }
+
+    page->onNavigate(getSongScreenHost(), 1);
+}
+
+static void functModePageLeft()
+{
+    SongModePage* page = SE->getActiveModePage();
+    if (page == nullptr)
+    {
+        return;
+    }
+
+    page->onHorizontalNavigate(getSongScreenHost(), -1);
+}
+
+static void functModePageRight()
+{
+    SongModePage* page = SE->getActiveModePage();
+    if (page == nullptr)
+    {
+        return;
+    }
+
+    page->onHorizontalNavigate(getSongScreenHost(), 1);
+}
+
+static void functModePageDelete()
+{
+    SongModePage* page = SE->getActiveModePage();
+    if (page == nullptr)
+    {
+        return;
+    }
+
+    page->onClearFocused(getSongScreenHost());
 }
 
 static void functDelete()

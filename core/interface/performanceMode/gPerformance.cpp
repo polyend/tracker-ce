@@ -381,6 +381,9 @@ void cPerformanceMode::hidePerformancePage()
     activePerformancePage = nullptr;
     activePerformancePageIndex = 0;
     page->onHide(getPerformancePageHost());
+    // Restore the track strip only when leaving module pages entirely.
+    // Page-to-page cycling calls onHide without this so the next onShow can paint.
+    getPerformancePageHost().restoreTrackLabels();
 }
 
 void cPerformanceMode::togglePerformancePage()
@@ -422,8 +425,13 @@ bool cPerformanceMode::cyclePerformancePage()
     }
 
     // Switch pages without restoring the track strip between them.
+    PerformancePage* prevPage = activePerformancePage;
     activePerformancePageIndex = nextIndex;
     activePerformancePage = nextPage;
+    if (prevPage != nullptr)
+    {
+        prevPage->onHide(getPerformancePageHost());
+    }
     nextPage->onShow(getPerformancePageHost());
     return true;
 }
