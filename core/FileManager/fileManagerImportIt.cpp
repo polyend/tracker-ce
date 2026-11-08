@@ -3,7 +3,7 @@
 
 #include "mtSequencer.h"
 
-#include "FeatureModuleRegistry.h"
+#include "ScreenHost.h"
 #include "fileManager.h"
 #include "fileTransfer.h"
 #include "log.h"
@@ -204,10 +204,7 @@ void cFileManager::importItFile_ProcessSong()
                 mtProject.song.playlist[a]++;
             }
         }
-        if (SongListColumn* column = featureModules.getSongListColumn())
-        {
-            column->clearAll();
-        }
+        notifySongPlaylistReplaced();
 
         moveToNextOperationStep();
     }

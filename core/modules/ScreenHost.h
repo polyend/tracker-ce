@@ -70,4 +70,8 @@ SongScreenHost& getSongScreenHost();
 // dispatches SongListColumn::onSlotStart. Called from FeatureModuleRegistry::updateAll.
 void pollSongListColumnSlotStarts();
 
+// Main-thread only. Clears Song list-column data when firmware replaces the
+// playlist wholesale (e.g. MOD/IT import).
+void notifySongPlaylistReplaced();
+
 #endif /* MODULES_SCREENHOST_H_ */

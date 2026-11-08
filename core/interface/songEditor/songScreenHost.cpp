@@ -3,7 +3,6 @@
 #include "FeatureModuleRegistry.h"
 #include "core/interfaceDefs.h"
 #include "mtSequencer.h"
-#include "mtStructs.h"
 #include "songEditor/songEditor.h"
 
 class SongScreenHostImpl : public SongScreenHost
@@ -54,4 +53,12 @@ void pollSongListColumnSlotStarts()
 
     wasPlayingSong = false;
     lastRecalledSongSlot = -1;
+}
+
+void notifySongPlaylistReplaced()
+{
+    if (SongListColumn* column = featureModules.getSongListColumn())
+    {
+        column->clearAll();
+    }
 }

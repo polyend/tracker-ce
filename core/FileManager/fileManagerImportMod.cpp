@@ -3,7 +3,7 @@
 
 #include "mtSequencer.h"
 
-#include "FeatureModuleRegistry.h"
+#include "ScreenHost.h"
 #include "fileManager.h"
 #include "fileTransfer.h"
 #include "log.h"
@@ -419,10 +419,7 @@ void cFileManager::importModFile_Patterns()
     {
         mtProject.song.playlist[a] = modSong.playlist[a] + 1;
     }
-    if (SongListColumn* column = featureModules.getSongListColumn())
-    {
-        column->clearAll();
-    }
+    notifySongPlaylistReplaced();
 
     // mod narzuca length 64
     for (uint8_t a = 0; a < 8; a++)

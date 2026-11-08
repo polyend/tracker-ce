@@ -148,7 +148,7 @@ class ScreenExtension
 | `onInserted` / `onRemoved` / `clearAll` | Stay aligned with Add/Delete Slot and MOD/IT import |
 | `onSlotStart` | Main-thread hook when song playback enters a row (module owns recall + any UI refresh) |
 
-`FeatureModuleRegistry::updateAll()` calls `pollSongListColumnSlotStarts()` (Song host) so Tracker does not latch playlist position itself. `getSongListColumn()` returns the first Song `ScreenExtension` that exposes a column. `SongListColumn::kSongSlotCount` must match `SONG_MAX` (255).
+`FeatureModuleRegistry::updateAll()` calls `pollSongListColumnSlotStarts()` (Song host) so Tracker does not latch playlist position itself. MOD/IT import calls `notifySongPlaylistReplaced()` instead of touching the column directly. `getSongListColumn()` returns the first Song `ScreenExtension` that exposes a column. `SongListColumn::kSongSlotCount` must match `SONG_MAX` (255).
 
 To extend another screen later: add a host header + `as*()` on `ScreenExtension`, implement the host next to that screen (same pattern as `getSongScreenHost()` / Performance pages).
 
