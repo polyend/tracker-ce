@@ -100,6 +100,7 @@ class FileSystemImpl final : public FileSystem
     std::string resolve(const char* path) const;
     HostFile* asFile(FileHandle h) const;
     bool matchFilter(enListFileFilter filter, const std::string& name, bool isDir) const;
+    int countFilteredInDir(const char* path, enListFileFilter filter) const;
 };
 
 #endif

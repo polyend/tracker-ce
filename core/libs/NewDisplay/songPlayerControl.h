@@ -103,6 +103,7 @@ class cSongPlayer : public cDisplayControl
     uint16_t textListPos = 0;
 
   private:
+    void syncListWindow();
     void showList();
     void drawTrackNames();
     void drawIcon(int pos, int row, int x, int y, int h);

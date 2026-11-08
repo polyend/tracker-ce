@@ -1,0 +1,6 @@
+# Open Song view and capture track-name headers
+wait 2500
+tap SONG
+wait 500
+screenshot /tmp/tracker-song.ppm
+quit

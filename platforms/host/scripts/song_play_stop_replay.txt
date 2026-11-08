@@ -1,0 +1,14 @@
+# Repro: play song, stop, play again — must not hang
+wait 2000
+tap SONG
+wait 400
+tap PLAY
+wait 1500
+tap PLAY
+wait 500
+tap PLAY
+wait 1500
+tap PLAY
+wait 500
+screenshot /tmp/tracker-song-replay.ppm
+quit

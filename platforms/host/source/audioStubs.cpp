@@ -1,17 +1,15 @@
 #include "config.h"
+
 #include <stdint.h>
 
 static bool s_audioMuted = false;
 
 void disableAudioInterrupt()
 {
-    hostDisableIrq();
+    // No-op on host: main serializes with SDL_LockAudioDevice instead.
 }
 
-void enableAudioInterrupt()
-{
-    hostEnableIrq();
-}
+void enableAudioInterrupt() {}
 
 void muteAudioOutByKey()
 {

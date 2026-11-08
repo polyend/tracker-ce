@@ -13,6 +13,8 @@ class ScriptRunner
     bool load(const char* path);
     // Returns false on hard error. Advances virtual time and drives tracker.
     bool run(PlatformImpl& platform, Tracker* tracker, WavWriter* wav);
+    // Real-time waits; audio must be driven by SDL callback (no virtual tick).
+    bool runLive(PlatformImpl& platform, Tracker* tracker);
 
   private:
     struct Step

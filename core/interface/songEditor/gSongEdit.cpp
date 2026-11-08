@@ -462,12 +462,11 @@ void cSongEditor::activateLabelsBorder()
     }
     else if (hasListColumn() && selectedPlace == listColumnPlace() && editMode)
     {
-        // Column has its own frame; don't wrap it in the pattern-list selection.
+        // Per-row FX cell frame is drawn by songPlayer; don't use the tall column frame.
         songPlayerData.isListActive = 0;
         songPlayerData.isListColumnActive = 1;
         songPlayerData.selection.isActive = 0;
-        display.setControlValue(frameControl, selectedPlace);
-        display.setControlShow(frameControl);
+        display.setControlHide(frameControl);
         display.refreshControl(frameControl);
         display.refreshControl(songPlayerControl);
         refreshListColumnButtonLabels();

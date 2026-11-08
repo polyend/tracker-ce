@@ -1,6 +1,7 @@
 #include "Ft812Rasterizer.h"
 #include "FT81x.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -8,9 +9,10 @@ namespace
 {
 int decodeVertexCoord(int16_t v, int fracBits)
 {
-    // VERTEX2F uses 1/16 pixel by default (frac=4) after VERTEX_FORMAT.
-    (void)fracBits;
-    return v / 16;
+    // VERTEX_FORMAT(frac): Tracker uses frac=0 (pixel coords). Default HW is 4 (1/16).
+    if (fracBits <= 0)
+        return v;
+    return v / (1 << fracBits);
 }
 
 uint32_t rgb565to888(uint16_t c)
@@ -36,11 +38,57 @@ void Ft812Rasterizer::reset()
     std::fill(ramG.begin(), ramG.end(), 0);
     std::fill(cmdFifo.begin(), cmdFifo.end(), 0);
     displayList.clear();
+    ramDl.clear();
     stack.clear();
     state = GraphicsState{};
     cmdWrite = 0;
     unknownCommands = 0;
     vertexCount = 0;
+    paintEnabled = true;
+    frameDirtyFlag = false;
+    scratchTransform = Affine2D{};
+}
+
+void Ft812Rasterizer::matrixLoadIdentity()
+{
+    scratchTransform = Affine2D{};
+}
+
+void Ft812Rasterizer::matrixTranslate(int32_t txFixed, int32_t tyFixed)
+{
+    const float tx = static_cast<float>(txFixed) / 65536.f;
+    const float ty = static_cast<float>(tyFixed) / 65536.f;
+    // scratch = scratch * T(tx, ty)
+    scratchTransform.e += scratchTransform.a * tx + scratchTransform.b * ty;
+    scratchTransform.f += scratchTransform.c * tx + scratchTransform.d * ty;
+}
+
+void Ft812Rasterizer::matrixRotate(int32_t angleFixed)
+{
+    // 65536 = full turn. Use OpenGL-style CCW matrix (a=cos,b=-sin,c=sin,d=cos);
+    // matches Tracker song/label vertical text (CMD_ROTATE 270°) on host.
+    const float rad =
+      static_cast<float>(angleFixed) * (6.28318530718f / 65536.f);
+    const float co = std::cos(rad);
+    const float si = std::sin(rad);
+    const float na = scratchTransform.a * co + scratchTransform.b * si;
+    const float nb = -scratchTransform.a * si + scratchTransform.b * co;
+    const float nc = scratchTransform.c * co + scratchTransform.d * si;
+    const float nd = -scratchTransform.c * si + scratchTransform.d * co;
+    scratchTransform.a = na;
+    scratchTransform.b = nb;
+    scratchTransform.c = nc;
+    scratchTransform.d = nd;
+}
+
+void Ft812Rasterizer::matrixScale(int32_t sxFixed, int32_t syFixed)
+{
+    const float sx = static_cast<float>(sxFixed) / 65536.f;
+    const float sy = static_cast<float>(syFixed) / 65536.f;
+    scratchTransform.a *= sx;
+    scratchTransform.b *= sy;
+    scratchTransform.c *= sx;
+    scratchTransform.d *= sy;
 }
 
 void Ft812Rasterizer::writeCmd32(uint32_t word)
@@ -91,28 +139,32 @@ uint8_t Ft812Rasterizer::writeString(const char* string, uint32_t length)
 {
     if (!string)
         return 0;
-    // Coprocessor strings are padded to 4 bytes with a trailing NUL.
-    uint32_t i = 0;
-    while (i < length)
+
+    // Match device API_SendString: length==0 means strlen(string).
+    const uint32_t rl = static_cast<uint32_t>(std::strlen(string));
+    if (length == 0 || length > rl)
+        length = rl;
+
+    // Payload is [chars...][NUL] then pad to a multiple of 4 bytes.
+    uint32_t total = length + 1;
+    const uint32_t pad = (4 - (total & 3)) & 3;
+    total += pad;
+
+    uint32_t offset = 0;
+    while (offset < total)
     {
         uint32_t word = 0;
-        for (int b = 0; b < 4 && i < length; ++b, ++i)
-            reinterpret_cast<uint8_t*>(&word)[b] = static_cast<uint8_t>(string[i]);
-        writeCmd32(word);
-        if (string[i - 1] == '\0')
-            break;
-    }
-    if (i == 0 || (i > 0 && string[i - 1] != '\0'))
-    {
-        // ensure NUL terminator word if needed
-        if ((i % 4) != 0)
+        for (int b = 0; b < 4 && offset < total; ++b, ++offset)
         {
-            // already padded by partial word
+            uint8_t v = 0;
+            if (offset < length)
+                v = static_cast<uint8_t>(string[offset]);
+            // offset==length → NUL; offset>length → pad zeros
+            reinterpret_cast<uint8_t*>(&word)[b] = v;
         }
-        else
-            writeCmd32(0);
+        writeCmd32(word);
     }
-    return 1;
+    return static_cast<uint8_t>(total);
 }
 
 void Ft812Rasterizer::beginList()
@@ -125,8 +177,17 @@ void Ft812Rasterizer::endList()
     // keep displayList for render()
 }
 
+bool Ft812Rasterizer::rectInsideScissor(int x0, int y0, int x1, int y1) const
+{
+    return x0 >= state.scissorX && y0 >= state.scissorY &&
+           x1 < state.scissorX + state.scissorW && y1 < state.scissorY + state.scissorH &&
+           x0 >= 0 && y0 >= 0 && x1 < kWidth && y1 < kHeight;
+}
+
 void Ft812Rasterizer::putPixel(int x, int y, uint32_t rgb, uint8_t a)
 {
+    if (!paintEnabled)
+        return;
     if (x < state.scissorX || y < state.scissorY || x >= state.scissorX + state.scissorW ||
         y >= state.scissorY + state.scissorH)
         return;
@@ -138,6 +199,8 @@ void Ft812Rasterizer::putPixel(int x, int y, uint32_t rgb, uint8_t a)
         dst = rgb;
         return;
     }
+    if (a == 0)
+        return;
     const uint32_t dr = (dst >> 16) & 0xFF;
     const uint32_t dg = (dst >> 8) & 0xFF;
     const uint32_t db = dst & 0xFF;
@@ -153,17 +216,40 @@ void Ft812Rasterizer::putPixel(int x, int y, uint32_t rgb, uint8_t a)
 
 void Ft812Rasterizer::fillRect(int x0, int y0, int x1, int y1, uint32_t rgb, uint8_t a)
 {
+    if (!paintEnabled)
+        return;
     if (x0 > x1)
         std::swap(x0, x1);
     if (y0 > y1)
         std::swap(y0, y1);
-    for (int y = y0; y <= y1; ++y)
-        for (int x = x0; x <= x1; ++x)
+
+    // Clip to scissor ∩ screen.
+    const int sx0 = std::max({ x0, state.scissorX, 0 });
+    const int sy0 = std::max({ y0, state.scissorY, 0 });
+    const int sx1 = std::min({ x1, state.scissorX + state.scissorW - 1, kWidth - 1 });
+    const int sy1 = std::min({ y1, state.scissorY + state.scissorH - 1, kHeight - 1 });
+    if (sx0 > sx1 || sy0 > sy1)
+        return;
+
+    if (a >= 255)
+    {
+        for (int y = sy0; y <= sy1; ++y)
+        {
+            uint32_t* row = framebuffer.data() + static_cast<size_t>(y) * kWidth + sx0;
+            std::fill(row, row + (sx1 - sx0 + 1), rgb);
+        }
+        return;
+    }
+
+    for (int y = sy0; y <= sy1; ++y)
+        for (int x = sx0; x <= sx1; ++x)
             putPixel(x, y, rgb, a);
 }
 
 void Ft812Rasterizer::drawLine(int x0, int y0, int x1, int y1, uint32_t rgb, uint8_t a)
 {
+    if (!paintEnabled)
+        return;
     int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
@@ -186,77 +272,203 @@ void Ft812Rasterizer::drawLine(int x0, int y0, int x1, int y1, uint32_t rgb, uin
     }
 }
 
-uint32_t Ft812Rasterizer::sampleBitmap(const BitmapHandle& h, int px, int py) const
+uint8_t Ft812Rasterizer::sampleBitmap(const BitmapHandle& h,
+                                      uint32_t sourceBase,
+                                      int px,
+                                      int py,
+                                      uint32_t& outRgb) const
 {
+    outRgb = 0;
     if (px < 0 || py < 0 || px >= h.width || py >= h.height)
         return 0;
-    const uint32_t addr = h.source + static_cast<uint32_t>(py) * h.stride;
-    if (addr >= kRamGSize)
+    const uint32_t row = sourceBase + static_cast<uint32_t>(py) * h.stride;
+    if (row >= kRamGSize)
         return 0;
-
-    auto lum = [](uint8_t v) -> uint32_t {
-        return (static_cast<uint32_t>(v) << 16) | (static_cast<uint32_t>(v) << 8) | v;
-    };
 
     switch (h.format)
     {
         case L1:
         {
-            const uint8_t byte = ramG[addr + static_cast<uint32_t>(px / 8)];
-            const uint8_t bit = (byte >> (7 - (px & 7))) & 1;
-            return bit ? 0xFFFFFF : 0;
+            const uint32_t addr = row + static_cast<uint32_t>(px / 8);
+            if (addr >= kRamGSize)
+                return 0;
+            const uint8_t bit = (ramG[addr] >> (7 - (px & 7))) & 1;
+            return bit ? 255 : 0;
         }
         case L2:
         {
-            const uint8_t byte = ramG[addr + static_cast<uint32_t>(px / 4)];
+            const uint32_t addr = row + static_cast<uint32_t>(px / 4);
+            if (addr >= kRamGSize)
+                return 0;
             const uint8_t shift = static_cast<uint8_t>((3 - (px & 3)) * 2);
-            const uint8_t v = (byte >> shift) & 0x3;
-            return lum(static_cast<uint8_t>(v * 85));
+            return static_cast<uint8_t>(((ramG[addr] >> shift) & 0x3) * 85);
         }
         case L4:
         {
-            const uint8_t byte = ramG[addr + static_cast<uint32_t>(px / 2)];
-            const uint8_t v = (px & 1) ? (byte & 0xF) : (byte >> 4);
-            return lum(static_cast<uint8_t>(v * 17));
+            const uint32_t addr = row + static_cast<uint32_t>(px / 2);
+            if (addr >= kRamGSize)
+                return 0;
+            const uint8_t v = (px & 1) ? (ramG[addr] & 0xF) : (ramG[addr] >> 4);
+            return static_cast<uint8_t>(v * 17);
         }
         case L8:
-            return lum(ramG[addr + static_cast<uint32_t>(px)]);
+        {
+            const uint32_t addr = row + static_cast<uint32_t>(px);
+            if (addr >= kRamGSize)
+                return 0;
+            return ramG[addr];
+        }
         case RGB565:
         {
+            const uint32_t addr = row + static_cast<uint32_t>(px) * 2;
+            if (addr + 1 >= kRamGSize)
+                return 0;
             uint16_t c = 0;
-            std::memcpy(&c, &ramG[addr + static_cast<uint32_t>(px) * 2], 2);
-            return rgb565to888(c);
+            std::memcpy(&c, &ramG[addr], 2);
+            outRgb = rgb565to888(c);
+            return 255;
         }
         default:
-            return lum(ramG[addr + static_cast<uint32_t>(px)]);
+        {
+            const uint32_t addr = row + static_cast<uint32_t>(px);
+            if (addr >= kRamGSize)
+                return 0;
+            return ramG[addr];
+        }
     }
 }
 
-void Ft812Rasterizer::drawBitmap(int x, int y, uint8_t handle, uint8_t /*cell*/)
+void Ft812Rasterizer::drawBitmap(int x, int y, uint8_t handle, uint8_t cell)
 {
+    if (!paintEnabled)
+        return;
     if (handle >= 32)
         return;
     const BitmapHandle& h = handles[handle];
-    if (h.width == 0 || h.height == 0)
+    if (h.width == 0 || h.height == 0 || h.stride == 0)
         return;
+
+    const uint32_t cellBytes = static_cast<uint32_t>(h.stride) * h.height;
+    uint32_t sourceBase = h.source;
+    if (h.isFont)
+    {
+        if (cell < h.firstChar)
+            return;
+        sourceBase = h.source + static_cast<uint32_t>(cell - h.firstChar) * cellBytes;
+    }
+    else if (cell != 0)
+    {
+        sourceBase = h.source + static_cast<uint32_t>(cell) * cellBytes;
+    }
+    if (sourceBase >= kRamGSize)
+        return;
+
+    const bool luminanceAlpha = (h.format == L1 || h.format == L2 || h.format == L4 ||
+                                 h.format == L8 || h.format > 16);
+    const bool useXform = !state.transform.isIdentity();
+
+    // Fast path: opaque color + L4 glyph, no transform, fully inside scissor.
+    if (!useXform && luminanceAlpha && h.format == L4 && state.alpha >= 255 &&
+        rectInsideScissor(x, y, x + h.width - 1, y + h.height - 1))
+    {
+        const uint32_t color = state.color;
+        for (int py = 0; py < h.height; ++py)
+        {
+            const uint32_t row = sourceBase + static_cast<uint32_t>(py) * h.stride;
+            if (row >= kRamGSize)
+                break;
+            uint32_t* dst = framebuffer.data() + static_cast<size_t>(y + py) * kWidth + x;
+            for (int px = 0; px < h.width; ++px)
+            {
+                const uint32_t addr = row + static_cast<uint32_t>(px / 2);
+                if (addr >= kRamGSize)
+                    break;
+                const uint8_t nibble = (px & 1) ? (ramG[addr] & 0xF) : (ramG[addr] >> 4);
+                if (nibble != 0)
+                    dst[px] = color;
+            }
+        }
+        return;
+    }
+
     for (int py = 0; py < h.height; ++py)
     {
         for (int px = 0; px < h.width; ++px)
         {
-            uint32_t c = sampleBitmap(h, px, py);
-            // Treat near-black as transparent for L-format icons.
-            if ((c & 0xFFFFFF) == 0)
+            uint32_t rgb = 0;
+            const uint8_t a = sampleBitmap(h, sourceBase, px, py, rgb);
+            if (a == 0)
                 continue;
-            putPixel(x + px, y + py, c, state.alpha);
+            int dx = x + px;
+            int dy = y + py;
+            if (useXform)
+            {
+                float ox = 0.f, oy = 0.f;
+                state.transform.map(static_cast<float>(px) + 0.5f,
+                                    static_cast<float>(py) + 0.5f,
+                                    ox,
+                                    oy);
+                dx = static_cast<int>(std::lround(ox + static_cast<float>(x)));
+                dy = static_cast<int>(std::lround(oy + static_cast<float>(y)));
+            }
+            if (luminanceAlpha)
+            {
+                const uint8_t aa =
+                  static_cast<uint8_t>((static_cast<uint16_t>(a) * state.alpha) / 255);
+                putPixel(dx, dy, state.color, aa);
+            }
+            else
+            {
+                putPixel(dx, dy, rgb, state.alpha);
+            }
         }
     }
 }
 
+uint8_t Ft812Rasterizer::fontCharWidth(uint8_t handle, unsigned char ch) const
+{
+    if (handle >= 32)
+        return 0;
+    const BitmapHandle& h = handles[handle];
+    if (!h.isFont || h.metricsAddr + ch >= kRamGSize)
+        return 0;
+    return ramG[h.metricsAddr + ch];
+}
+
 void Ft812Rasterizer::drawText(int x, int y, int font, uint16_t options, const char* text)
 {
-    if (!text)
+    if (!paintEnabled || !text)
         return;
-    // Built-in bitmap font approximation: 8x8 cells.
+
+    const uint8_t handle = static_cast<uint8_t>(font);
+    if (handle < 32 && handles[handle].isFont)
+    {
+        const BitmapHandle& h = handles[handle];
+        int textW = 0;
+        for (int i = 0; text[i]; ++i)
+            textW += fontCharWidth(handle, static_cast<unsigned char>(text[i]));
+
+        int drawX = x;
+        int drawY = y;
+        if (options & OPT_CENTERX)
+            drawX -= textW / 2;
+        if (options & OPT_CENTERY)
+            drawY -= static_cast<int>(h.height) / 2;
+        if (options & OPT_RIGHTX)
+            drawX -= textW;
+
+        for (int i = 0; text[i]; ++i)
+        {
+            const unsigned char chv = static_cast<unsigned char>(text[i]);
+            const uint8_t cw = fontCharWidth(handle, chv);
+            if (cw > 0)
+                drawBitmap(drawX, drawY, handle, chv);
+            drawX += cw;
+        }
+        return;
+    }
+
+    // Built-in ROM font fallback (handles 16–31): blocky stand-in.
     const int cw = (font >= 20) ? 12 : 8;
     const int ch = (font >= 20) ? 16 : 10;
     int len = static_cast<int>(std::strlen(text));
@@ -272,16 +484,43 @@ void Ft812Rasterizer::drawText(int x, int y, int font, uint16_t options, const c
     for (int i = 0; text[i]; ++i)
     {
         const unsigned char chv = static_cast<unsigned char>(text[i]);
-        // Tiny 5x7 glyph: filled blocks for printable ASCII.
-        if (chv >= 32)
-        {
+        if (chv > 32)
             fillRect(drawX + 1, drawY + 1, drawX + cw - 2, drawY + ch - 2, state.color, state.alpha);
-            // carve a rough character hole so text is readable as blocks
-            if (chv != ' ')
-                fillRect(drawX + 2, drawY + 2, drawX + cw - 3, drawY + ch - 3, 0, 40);
-        }
         drawX += cw;
     }
+}
+
+void Ft812Rasterizer::memcpyRam(uint32_t dest, uint32_t src, uint32_t num)
+{
+    if (num == 0)
+        return;
+
+    if (src == RAM_DL)
+    {
+        const uint32_t avail = static_cast<uint32_t>(ramDl.size() * 4);
+        const uint32_t n = std::min(num, avail);
+        if (dest + n > kRamGSize)
+            return;
+        std::memcpy(ramG.data() + dest, ramDl.data(), n);
+        return;
+    }
+    if (dest == RAM_DL)
+    {
+        if (src + num > kRamGSize)
+            return;
+        ramDl.resize((num + 3) / 4);
+        std::memcpy(ramDl.data(), ramG.data() + src, num);
+        return;
+    }
+    if (dest + num > kRamGSize || src + num > kRamGSize)
+        return;
+    std::memmove(ramG.data() + dest, ramG.data() + src, num);
+}
+
+void Ft812Rasterizer::executeDlStream(const std::vector<uint32_t>& words)
+{
+    for (size_t j = 0; j < words.size(); ++j)
+        executeWord(words[j], j, words);
 }
 
 void Ft812Rasterizer::executeCopro(uint32_t cmd, size_t& i, const std::vector<uint32_t>& list)
@@ -290,10 +529,59 @@ void Ft812Rasterizer::executeCopro(uint32_t cmd, size_t& i, const std::vector<ui
 
     if (cmd == CMD_DLSTART)
     {
+        // REG_CMD_DL reset — capture happens in render() around this marker.
         return;
     }
     if (cmd == CMD_SWAP)
     {
+        return;
+    }
+    if (cmd == CMD_MEMCPY && need(3))
+    {
+        const uint32_t dest = list[i + 1];
+        const uint32_t src = list[i + 2];
+        const uint32_t num = list[i + 3];
+        i += 3;
+        memcpyRam(dest, src, num);
+        return;
+    }
+    if (cmd == CMD_APPEND && need(2))
+    {
+        const uint32_t ptr = list[i + 1];
+        const uint32_t num = list[i + 2];
+        i += 2;
+        if (ptr >= kRamGSize || num == 0)
+            return;
+        const uint32_t bytes = std::min(num, static_cast<uint32_t>(kRamGSize - ptr));
+        const size_t words = bytes / 4;
+        std::vector<uint32_t> sub(words);
+        std::memcpy(sub.data(), ramG.data() + ptr, words * 4);
+        executeDlStream(sub);
+        return;
+    }
+    if (cmd == CMD_MEMZERO && need(2))
+    {
+        const uint32_t ptr = list[i + 1];
+        const uint32_t num = list[i + 2];
+        i += 2;
+        if (ptr < kRamGSize)
+        {
+            const uint32_t n = std::min(num, static_cast<uint32_t>(kRamGSize - ptr));
+            std::memset(ramG.data() + ptr, 0, n);
+        }
+        return;
+    }
+    if (cmd == CMD_MEMSET && need(3))
+    {
+        const uint32_t ptr = list[i + 1];
+        const uint32_t value = list[i + 2];
+        const uint32_t num = list[i + 3];
+        i += 3;
+        if (ptr < kRamGSize)
+        {
+            const uint32_t n = std::min(num, static_cast<uint32_t>(kRamGSize - ptr));
+            std::memset(ramG.data() + ptr, static_cast<int>(value & 0xFF), n);
+        }
         return;
     }
     if (cmd == CMD_BGCOLOR && need(1))
@@ -306,15 +594,25 @@ void Ft812Rasterizer::executeCopro(uint32_t cmd, size_t& i, const std::vector<ui
         ++i;
         return;
     }
-    if (cmd == CMD_GRADIENT && need(6))
+    if (cmd == CMD_GRADIENT && need(4))
     {
+        // CMD + (x0,y0) + rgb0 + (x1,y1) + rgb1  => 4 param words
         const int16_t x0 = static_cast<int16_t>(list[i + 1] & 0xFFFF);
         const int16_t y0 = static_cast<int16_t>((list[i + 1] >> 16) & 0xFFFF);
         const uint32_t c0 = list[i + 2];
         const int16_t x1 = static_cast<int16_t>(list[i + 3] & 0xFFFF);
         const int16_t y1 = static_cast<int16_t>((list[i + 3] >> 16) & 0xFFFF);
         const uint32_t c1 = list[i + 4];
-        i += 6;
+        i += 4;
+        // FT81x fills the scissor region along the gradient axis. Tracker often passes x0==x1=0
+        // for a full-width vertical fade.
+        int xLeft = std::min(x0, x1);
+        int xRight = std::max(x0, x1);
+        if (xLeft == xRight)
+        {
+            xLeft = state.scissorX;
+            xRight = state.scissorX + state.scissorW - 1;
+        }
         const int yStart = std::min(y0, y1);
         const int yEnd = std::max(y0, y1);
         for (int y = yStart; y <= yEnd; ++y)
@@ -324,21 +622,23 @@ void Ft812Rasterizer::executeCopro(uint32_t cmd, size_t& i, const std::vector<ui
             uint32_t c = (lerp((c0 >> 16) & 0xFF, (c1 >> 16) & 0xFF) << 16) |
                          (lerp((c0 >> 8) & 0xFF, (c1 >> 8) & 0xFF) << 8) |
                          lerp(c0 & 0xFF, c1 & 0xFF);
-            fillRect(std::min(x0, x1), y, std::max(x0, x1), y, c, state.alpha);
+            fillRect(xLeft, y, xRight, y, c, state.alpha);
         }
         return;
     }
-    if (cmd == CMD_TEXT && need(3))
+    if (cmd == CMD_TEXT && need(2))
     {
+        // Leave i on the last consumed word so render()/executeDlStream's for-loop
+        // ++i lands on the next opcode (same convention as fixed-arg co-pro cmds).
         const int16_t x = static_cast<int16_t>(list[i + 1] & 0xFFFF);
         const int16_t y = static_cast<int16_t>((list[i + 1] >> 16) & 0xFFFF);
         const int16_t font = static_cast<int16_t>(list[i + 2] & 0xFFFF);
         const uint16_t options = static_cast<uint16_t>((list[i + 2] >> 16) & 0xFFFF);
-        i += 3;
+        i += 2;
         std::string text;
-        while (i < list.size())
+        while (i + 1 < list.size())
         {
-            uint32_t w = list[i++];
+            uint32_t w = list[++i];
             for (int b = 0; b < 4; ++b)
             {
                 char c = reinterpret_cast<char*>(&w)[b];
@@ -366,7 +666,7 @@ void Ft812Rasterizer::executeCopro(uint32_t cmd, size_t& i, const std::vector<ui
         drawText(x, y, font, options, buf);
         return;
     }
-    if (cmd == CMD_BUTTON && need(4))
+    if (cmd == CMD_BUTTON && need(3))
     {
         const int16_t x = static_cast<int16_t>(list[i + 1] & 0xFFFF);
         const int16_t y = static_cast<int16_t>((list[i + 1] >> 16) & 0xFFFF);
@@ -374,12 +674,12 @@ void Ft812Rasterizer::executeCopro(uint32_t cmd, size_t& i, const std::vector<ui
         const int16_t h = static_cast<int16_t>((list[i + 2] >> 16) & 0xFFFF);
         const int16_t font = static_cast<int16_t>(list[i + 3] & 0xFFFF);
         const uint16_t options = static_cast<uint16_t>((list[i + 3] >> 16) & 0xFFFF);
-        i += 4;
+        i += 3;
         fillRect(x, y, x + w, y + h, state.color, state.alpha);
         std::string text;
-        while (i < list.size())
+        while (i + 1 < list.size())
         {
-            uint32_t word = list[i++];
+            uint32_t word = list[++i];
             for (int b = 0; b < 4; ++b)
             {
                 char c = reinterpret_cast<char*>(&word)[b];
@@ -393,30 +693,116 @@ void Ft812Rasterizer::executeCopro(uint32_t cmd, size_t& i, const std::vector<ui
         }
         return;
     }
-    if (cmd == CMD_LOADIDENTITY || cmd == CMD_SETMATRIX || cmd == CMD_STOP || cmd == CMD_COLDSTART)
+    if (cmd == CMD_STOP || cmd == CMD_COLDSTART)
         return;
+    if (cmd == CMD_LOADIDENTITY)
+    {
+        matrixLoadIdentity();
+        return;
+    }
+    if (cmd == CMD_SETMATRIX)
+    {
+        state.transform = scratchTransform;
+        return;
+    }
     if (cmd == CMD_TRANSLATE && need(2))
     {
+        matrixTranslate(static_cast<int32_t>(list[i + 1]), static_cast<int32_t>(list[i + 2]));
         i += 2;
         return;
     }
     if (cmd == CMD_ROTATE && need(1))
     {
+        matrixRotate(static_cast<int32_t>(list[i + 1]));
         ++i;
         return;
     }
     if (cmd == CMD_SCALE && need(2))
     {
+        matrixScale(static_cast<int32_t>(list[i + 1]), static_cast<int32_t>(list[i + 2]));
         i += 2;
         return;
     }
-    if (cmd == CMD_SETFONT || cmd == CMD_SETFONT2)
+    if (cmd == CMD_SETBITMAP && need(3))
     {
-        // skip args loosely
-        if (cmd == CMD_SETFONT && need(2))
-            i += 2;
-        else if (cmd == CMD_SETFONT2 && need(3))
-            i += 3;
+        // CMD_SETBITMAP(source, fmt, w, h) — programs the current bitmap handle.
+        const uint32_t source = list[i + 1];
+        const uint16_t fmt = static_cast<uint16_t>(list[i + 2] & 0xFFFF);
+        const uint16_t w = static_cast<uint16_t>((list[i + 2] >> 16) & 0xFFFF);
+        const uint16_t h = static_cast<uint16_t>(list[i + 3] & 0xFFFF);
+        i += 3;
+        auto& bh = handles[state.bitmapHandle];
+        bh.source = source;
+        bh.format = static_cast<uint8_t>(fmt);
+        bh.width = w;
+        bh.height = h;
+        // Derive stride for common L-formats when not otherwise set.
+        if (fmt == L1)
+            bh.stride = static_cast<uint16_t>((w + 7) / 8);
+        else if (fmt == L2)
+            bh.stride = static_cast<uint16_t>((w + 3) / 4);
+        else if (fmt == L4)
+            bh.stride = static_cast<uint16_t>((w + 1) / 2);
+        else if (fmt == L8)
+            bh.stride = w;
+        else if (fmt == RGB565)
+            bh.stride = static_cast<uint16_t>(w * 2);
+        else if (bh.stride == 0)
+            bh.stride = w;
+        bh.isFont = false;
+        return;
+    }
+    if (cmd == CMD_SETFONT && need(2))
+    {
+        const uint32_t font = list[i + 1] & 31;
+        const uint32_t ptr = list[i + 2];
+        i += 2;
+        if (font < 32 && ptr + 148 <= kRamGSize)
+        {
+            auto& h = handles[font];
+            h.isFont = true;
+            h.metricsAddr = ptr;
+            h.firstChar = 0;
+            h.format = ramG[ptr + 128];
+            uint32_t stride = 0, width = 0, height = 0;
+            std::memcpy(&stride, &ramG[ptr + 132], 4);
+            std::memcpy(&width, &ramG[ptr + 136], 4);
+            std::memcpy(&height, &ramG[ptr + 140], 4);
+            h.stride = static_cast<uint16_t>(stride);
+            h.width = static_cast<uint16_t>(width);
+            h.height = static_cast<uint16_t>(height);
+            h.source = ptr + 148;
+        }
+        return;
+    }
+    if (cmd == CMD_SETFONT2 && need(3))
+    {
+        // CMD_SETFONT2(font, pointer, firstchar) — metrics @ pointer, glyphs packed from firstchar.
+        const uint32_t font = list[i + 1] & 31;
+        const uint32_t ptr = list[i + 2];
+        const uint32_t first = list[i + 3] & 0xFF;
+        i += 3;
+        if (font < 32 && ptr + 148 <= kRamGSize)
+        {
+            auto& h = handles[font];
+            h.isFont = true;
+            h.metricsAddr = ptr;
+            h.firstChar = static_cast<uint8_t>(first);
+            // Prefer layout already programmed via BITMAP_* on this handle; fill gaps from metrics.
+            if (h.stride == 0 || h.height == 0 || h.width == 0)
+            {
+                h.format = ramG[ptr + 128];
+                uint32_t stride = 0, width = 0, height = 0;
+                std::memcpy(&stride, &ramG[ptr + 132], 4);
+                std::memcpy(&width, &ramG[ptr + 136], 4);
+                std::memcpy(&height, &ramG[ptr + 140], 4);
+                h.stride = static_cast<uint16_t>(stride);
+                h.width = static_cast<uint16_t>(width);
+                h.height = static_cast<uint16_t>(height);
+            }
+            if (h.source == 0)
+                h.source = ptr + 148;
+        }
         return;
     }
     if (cmd == CMD_INFLATE && need(1))
@@ -460,8 +846,8 @@ void Ft812Rasterizer::executeWord(uint32_t word, size_t& i, const std::vector<ui
         // sign extend 15-bit
         int sx = (x & 0x4000) ? (x | ~32767) : x;
         int sy = (y & 0x4000) ? (y | ~32767) : y;
-        sx = decodeVertexCoord(static_cast<int16_t>(sx), 4);
-        sy = decodeVertexCoord(static_cast<int16_t>(sy), 4);
+        sx = decodeVertexCoord(static_cast<int16_t>(sx), state.vertexFrac);
+        sy = decodeVertexCoord(static_cast<int16_t>(sy), state.vertexFrac);
 
         if (state.prim == RECTS)
         {
@@ -510,15 +896,12 @@ void Ft812Rasterizer::executeWord(uint32_t word, size_t& i, const std::vector<ui
     }
     if ((word >> 30) == 2)
     {
-        // VERTEX2II
+        // VERTEX2II always draws a bitmap cell (no BEGIN required on FT81x).
         const int x = (word >> 21) & 511;
         const int y = (word >> 12) & 511;
         const uint8_t handle = (word >> 7) & 31;
         const uint8_t cell = word & 127;
-        if (state.prim == BITMAPS)
-            drawBitmap(x, y, handle, cell);
-        else
-            fillRect(x, y, x + 1, y + 1, state.color, state.alpha);
+        drawBitmap(x, y, handle, cell);
         return;
     }
 
@@ -528,8 +911,11 @@ void Ft812Rasterizer::executeWord(uint32_t word, size_t& i, const std::vector<ui
             state.clearColor = word & 0xFFFFFF;
             break;
         case 38: // CLEAR
-            if (word & 4)
+            if (paintEnabled && (word & 4))
                 std::fill(framebuffer.begin(), framebuffer.end(), state.clearColor);
+            break;
+        case 39: // VERTEX_FORMAT
+            state.vertexFrac = static_cast<int>(word & 7);
             break;
         case 4: // COLOR_RGB
             state.color = word & 0xFFFFFF;
@@ -585,13 +971,40 @@ void Ft812Rasterizer::executeWord(uint32_t word, size_t& i, const std::vector<ui
         }
         case 8: // BITMAP_SIZE
         {
+            // Screen footprint after transform — do not clobber source layout dims used for sampling.
             state.bitmapWidth = (word >> 9) & 511;
-            // height already in layout; size also encodes height
-            const uint16_t bh = word & 511;
-            auto& h = handles[state.bitmapHandle];
-            h.width = state.bitmapWidth;
-            if (bh)
-                h.height = bh;
+            break;
+        }
+        case 21: // BITMAP_TRANSFORM_A (8.8 signed 17-bit)
+        case 22: // BITMAP_TRANSFORM_B
+        case 24: // BITMAP_TRANSFORM_D
+        case 25: // BITMAP_TRANSFORM_E
+        {
+            int32_t v = static_cast<int32_t>(word & 0x1FFFF);
+            if (v & 0x10000)
+                v |= ~0x1FFFF;
+            const float f = static_cast<float>(v) / 256.f;
+            if (op == 21)
+                state.transform.a = f;
+            else if (op == 22)
+                state.transform.b = f;
+            else if (op == 24)
+                state.transform.c = f;
+            else
+                state.transform.d = f;
+            break;
+        }
+        case 23: // BITMAP_TRANSFORM_C (1/256 pixel, signed 24-bit)
+        case 26: // BITMAP_TRANSFORM_F
+        {
+            int32_t v = static_cast<int32_t>(word & 0xFFFFFF);
+            if (v & 0x800000)
+                v |= ~0xFFFFFF;
+            const float f = static_cast<float>(v) / 256.f;
+            if (op == 23)
+                state.transform.e = f;
+            else
+                state.transform.f = f;
             break;
         }
         case 40: // BITMAP_LAYOUT_H
@@ -630,10 +1043,52 @@ void Ft812Rasterizer::executeWord(uint32_t word, size_t& i, const std::vector<ui
 void Ft812Rasterizer::render()
 {
     state = GraphicsState{};
+    scratchTransform = Affine2D{};
     stack.clear();
     vertexCount = 0;
+
+    // step1 (control rebuild) has DLSTART but no SWAP — still need ramDl for MEMCPY.
+    // step2 is often just MEMCPY — must execute, but painting is wasted.
+    // step3 has APPEND…DISPLAY/SWAP — this is the only paint that reaches the screen.
+    bool hasSwap = false;
+    for (uint32_t w : displayList)
+    {
+        if (w == CMD_SWAP)
+        {
+            hasSwap = true;
+            break;
+        }
+    }
+    paintEnabled = hasSwap;
+
+    // Capture words after CMD_DLSTART into ramDl (simulates REG_CMD_DL / RAM_DL).
+    // Tracker step1 builds a control DL, step2 MEMCPYs it from RAM_DL, step3 APPENDs it.
+    size_t dlCaptureFrom = static_cast<size_t>(-1);
     for (size_t i = 0; i < displayList.size(); ++i)
-        executeWord(displayList[i], i, displayList);
+    {
+        const uint32_t word = displayList[i];
+        if (word == CMD_DLSTART)
+        {
+            ramDl.clear();
+            dlCaptureFrom = i + 1;
+        }
+        else if (word == CMD_SWAP && dlCaptureFrom != static_cast<size_t>(-1))
+        {
+            ramDl.assign(displayList.begin() + static_cast<std::ptrdiff_t>(dlCaptureFrom),
+                         displayList.begin() + static_cast<std::ptrdiff_t>(i));
+            dlCaptureFrom = static_cast<size_t>(-1);
+        }
+        executeWord(word, i, displayList);
+    }
+    if (dlCaptureFrom != static_cast<size_t>(-1) && dlCaptureFrom <= displayList.size())
+    {
+        ramDl.assign(displayList.begin() + static_cast<std::ptrdiff_t>(dlCaptureFrom),
+                     displayList.end());
+    }
+
+    if (hasSwap)
+        frameDirtyFlag = true;
+    paintEnabled = true;
 }
 
 bool Ft812Rasterizer::savePng(const char* path) const

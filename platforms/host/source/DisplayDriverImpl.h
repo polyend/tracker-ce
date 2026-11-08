@@ -20,7 +20,7 @@ class DisplayDriverImpl : public DisplayDriver
         width = Ft812Rasterizer::kWidth;
         height = Ft812Rasterizer::kHeight;
     }
-    virtual uint32_t getDisplayListOffset() override { return 0; }
+    virtual uint32_t getDisplayListOffset() override { return eve.displayListOffset(); }
     virtual void IncCMDOffset(uint16_t value) override { eve.incCmdOffset(value); }
     virtual void WriteData32(uint32_t data) override { eve.writeCmd32(data); }
 

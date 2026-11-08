@@ -2,6 +2,8 @@
 #include "ScriptRunner.h"
 #include "Tracker.h"
 #include "WavWriter.h"
+#include "config.h"
+#include "display.h"
 #include "interfaceDefs.h"
 
 #include <SDL.h>
@@ -13,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -21,6 +24,62 @@ Tracker* gTracker = nullptr;
 WavWriter* gWav = nullptr;
 std::atomic<bool> gRunning{ true };
 
+// SPSC ring: audio callback produces, main thread drains to WavWriter (no FILE I/O on RT thread).
+constexpr size_t kWavRingSamples = 44118 * 2 * 2; // ~2s interleaved stereo
+std::vector<int16_t> gWavRing;
+std::atomic<uint32_t> gWavRingWrite{ 0 };
+std::atomic<uint32_t> gWavRingRead{ 0 };
+std::atomic<bool> gWavCapture{ false };
+
+void wavRingPush(const int16_t* interleaved, int frames)
+{
+    if (!gWavCapture.load(std::memory_order_relaxed) || !interleaved || frames <= 0)
+        return;
+    if (gWavRing.empty())
+        return;
+    const uint32_t cap = static_cast<uint32_t>(gWavRing.size());
+    uint32_t w = gWavRingWrite.load(std::memory_order_relaxed);
+    const uint32_t r = gWavRingRead.load(std::memory_order_acquire);
+    const uint32_t used = (w + cap - r) % cap;
+    const uint32_t free = (cap - 1) - used;
+    const uint32_t want = static_cast<uint32_t>(frames) * 2u;
+    const uint32_t n = std::min(want, free);
+    for (uint32_t i = 0; i < n; ++i)
+    {
+        gWavRing[w] = interleaved[i];
+        w = (w + 1) % cap;
+    }
+    gWavRingWrite.store(w, std::memory_order_release);
+}
+
+void wavRingDrain()
+{
+    if (!gWav || !gWav->isOpen() || gWavRing.empty())
+        return;
+    const uint32_t cap = static_cast<uint32_t>(gWavRing.size());
+    uint32_t r = gWavRingRead.load(std::memory_order_relaxed);
+    const uint32_t w = gWavRingWrite.load(std::memory_order_acquire);
+    int16_t left[256]{};
+    int16_t right[256]{};
+    while (r != w)
+    {
+        int frames = 0;
+        while (r != w && frames < 256)
+        {
+            left[frames] = gWavRing[r];
+            r = (r + 1) % cap;
+            if (r == w)
+                break;
+            right[frames] = gWavRing[r];
+            r = (r + 1) % cap;
+            ++frames;
+        }
+        if (frames > 0)
+            gWav->writeInterleaved(left, right, frames);
+    }
+    gWavRingRead.store(r, std::memory_order_release);
+}
+
 void audioCallback(void* /*userdata*/, Uint8* stream, int len)
 {
     if (!gTracker || !gPlatform)
@@ -28,6 +87,7 @@ void audioCallback(void* /*userdata*/, Uint8* stream, int len)
         std::memset(stream, 0, len);
         return;
     }
+    hostEnterAudioCallback();
     const int frames = len / (int)(sizeof(int16_t) * 2);
     int16_t* out = reinterpret_cast<int16_t*>(stream);
     int offset = 0;
@@ -42,21 +102,23 @@ void audioCallback(void* /*userdata*/, Uint8* stream, int len)
             out[(offset + i) * 2] = left[i];
             out[(offset + i) * 2 + 1] = right[i];
         }
-        if (gWav && gWav->isOpen())
-            gWav->writeInterleaved(left, right, n);
+        wavRingPush(out + offset * 2, n);
         offset += n;
     }
+    hostLeaveAudioCallback();
 }
 
 void printUsage(const char* argv0)
 {
     std::printf(
-      "Usage: %s [--sd DIR] [--wav OUT.wav] [--script FILE] [--scale N] [--headless]\n"
-      "  --sd DIR       SD card root folder (default ./sdcard)\n"
-      "  --wav OUT.wav  Record master audio\n"
-      "  --script FILE  Run a headless button script\n"
-      "  --scale N      Window scale (default 1)\n"
-      "  --headless     No window (implied by --script)\n",
+      "Usage: %s [--sd DIR] [--wav OUT.wav] [--script FILE] [--live-script FILE] [--scale N] "
+      "[--headless]\n"
+      "  --sd DIR         SD card root folder (default ./sdcard)\n"
+      "  --wav OUT.wav    Record master audio\n"
+      "  --script FILE    Headless button script (virtual time)\n"
+      "  --live-script FILE  Script with real SDL audio thread\n"
+      "  --scale N        Window scale (default 1)\n"
+      "  --headless       No window (implied by --script)\n",
       argv0);
 }
 
@@ -65,8 +127,13 @@ uint8_t mapKeyToButton(SDL_Keycode key, bool& isPad, uint8_t& padIdx)
     isPad = false;
     switch (key)
     {
+        // --- Tracker Mini transport / edit cluster ---
         case SDLK_SPACE:
             return interfaceButtonPlay;
+        case SDLK_r: // Rec / edit mode (takes priority over pad letter mapping below)
+            return interfaceButtonRec;
+        case SDLK_c: // Copy (Shift+C pastes in firmware handlers)
+            return interfaceButtonCopy;
         case SDLK_LSHIFT:
         case SDLK_RSHIFT:
             return interfaceButtonShift;
@@ -83,6 +150,67 @@ uint8_t mapKeyToButton(SDL_Keycode key, bool& isPad, uint8_t& padIdx)
         case SDLK_BACKSPACE:
         case SDLK_DELETE:
             return interfaceButtonDelete;
+
+        // --- Pattern step columns ---
+        case SDLK_n: // Note
+            return interfaceButtonNote;
+        case SDLK_i: // Instrument
+            return interfaceButtonInstr;
+        case SDLK_o: // FX1 (Vol key on device)
+            return interfaceButtonVol;
+        case SDLK_p: // FX2
+            return interfaceButtonFx;
+
+        // --- Mini Menu / D-pad center ---
+        case SDLK_F10:
+        case SDLK_TAB:
+        case SDLK_BACKQUOTE: // ` — reliable on macOS (Tab is often swallowed)
+            return interfaceButtonMiniMenu;
+        case SDLK_SLASH: // / — Mini middle (cycle menu option pages / modes)
+            return interfaceButtonMiniMiddle;
+
+        // --- Mini assignable Function buttons (default: Pattern / Instr / Sample Play / Master) ---
+        case SDLK_COMMA: // ,
+        case SDLK_F9:
+            return interfaceButtonMiniFn1;
+        case SDLK_PERIOD: // .
+        case SDLK_F11:
+            return interfaceButtonMiniFn2;
+        case SDLK_SEMICOLON: // ;
+        case SDLK_F12:
+            return interfaceButtonMiniFn3;
+        case SDLK_QUOTE: // '
+            return interfaceButtonMiniFn4;
+
+        // --- Soft keys under the screen (left → right) ---
+        case SDLK_1:
+            return interfaceButton0;
+        case SDLK_2:
+            return interfaceButton1;
+        case SDLK_3:
+            return interfaceButton2;
+        case SDLK_4:
+            return interfaceButton3;
+        case SDLK_5:
+            return interfaceButton4;
+        case SDLK_6:
+            return interfaceButton5;
+        case SDLK_7:
+            return interfaceButton6;
+        case SDLK_8:
+            return interfaceButton7;
+
+        // --- Mini big +/- buttons (±1 / ±10 value steps) ---
+        case SDLK_EQUALS: // =
+            return interfaceButtonMiniPlus1;
+        case SDLK_MINUS: // -
+            return interfaceButtonMiniMinus1;
+        case SDLK_RIGHTBRACKET: // ]
+            return interfaceButtonMiniPlus10;
+        case SDLK_LEFTBRACKET: // [
+            return interfaceButtonMiniMinus10;
+
+        // --- Direct module shortcuts (also reachable via Menu / Fn bindings) ---
         case SDLK_F1:
             return interfaceButtonSong;
         case SDLK_F2:
@@ -99,20 +227,31 @@ uint8_t mapKeyToButton(SDL_Keycode key, bool& isPad, uint8_t& padIdx)
             return interfaceButtonInstr;
         case SDLK_F8:
             return interfaceButtonMaster;
+        case SDLK_F13:
+            return interfaceButtonPattern;
+        case SDLK_F14:
+            return interfaceButtonSampleRec;
+        case SDLK_F15:
+            return interfaceButtonSampleLoad;
+        case SDLK_F16:
+            return interfaceButtonParams;
+        case SDLK_F17:
+            return interfaceButtonGame;
         default:
             break;
     }
-    // Letter rows map to pads 0..47 roughly
+    // Letter rows map to pads 0..25; 9/0 still hit pads 35/26
+    // Reserved letters (not pads): C Copy, R Rec, N/I/O/P pattern columns
     if (key >= SDLK_a && key <= SDLK_z)
     {
         isPad = true;
         padIdx = static_cast<uint8_t>(key - SDLK_a);
         return 0;
     }
-    if (key >= SDLK_0 && key <= SDLK_9)
+    if (key == SDLK_9 || key == SDLK_0)
     {
         isPad = true;
-        padIdx = static_cast<uint8_t>(26 + (key - SDLK_0));
+        padIdx = static_cast<uint8_t>(key == SDLK_9 ? 35 : 26);
         return 0;
     }
     return 0xFF;
@@ -144,6 +283,8 @@ int main(int argc, char** argv)
     std::string sdRoot = "./sdcard";
     std::string wavPath;
     std::string scriptPath;
+    bool liveScript = false;
+    bool songStress = false;
     int scale = 1;
     bool headless = false;
 
@@ -158,10 +299,19 @@ int main(int argc, char** argv)
             scriptPath = argv[++i];
             headless = true;
         }
+        else if (std::strcmp(argv[i], "--live-script") == 0 && i + 1 < argc)
+        {
+            // Real SDL audio thread + wall clock (catches host IRQ/audio deadlocks).
+            scriptPath = argv[++i];
+            liveScript = true;
+            headless = true; // no window; audio still opened below
+        }
         else if (std::strcmp(argv[i], "--scale") == 0 && i + 1 < argc)
             scale = std::max(1, std::atoi(argv[++i]));
         else if (std::strcmp(argv[i], "--headless") == 0)
             headless = true;
+        else if (std::strcmp(argv[i], "--song-stress") == 0)
+            songStress = true;
         else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0)
         {
             printUsage(argv[0]);
@@ -189,6 +339,10 @@ int main(int argc, char** argv)
             return 1;
         }
         gWav = &wav;
+        gWavRing.assign(kWavRingSamples, 0);
+        gWavRingWrite.store(0);
+        gWavRingRead.store(0);
+        gWavCapture.store(true);
     }
 
     platform.init(sdRoot.c_str());
@@ -196,9 +350,11 @@ int main(int argc, char** argv)
     if (startDisplay)
         startDisplay(&platform);
     tracker->init(&platform);
+    std::fprintf(stderr, "tracker-host: sdl-audio-lock + display-budget (2026-11-08d)\n");
 
-    if (!scriptPath.empty())
+    if (!scriptPath.empty() && !liveScript)
     {
+        // Headless scripts use virtual time (single-threaded audio).
         ScriptRunner runner;
         if (!runner.load(scriptPath.c_str()))
         {
@@ -211,7 +367,7 @@ int main(int argc, char** argv)
         return ok ? 0 : 1;
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0)
+    if (SDL_Init((liveScript ? 0 : SDL_INIT_VIDEO) | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0)
     {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -224,13 +380,39 @@ int main(int argc, char** argv)
     want.samples = 512;
     want.callback = audioCallback;
     SDL_AudioDeviceID audioDev = 0;
-    if (!headless)
+    if (!headless || liveScript)
     {
         audioDev = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
         if (!audioDev)
             std::fprintf(stderr, "SDL audio open failed: %s (continuing silent)\n", SDL_GetError());
         else
+        {
+            hostSetAudioDevice(reinterpret_cast<void*>(static_cast<uintptr_t>(audioDev)));
             SDL_PauseAudioDevice(audioDev, 0);
+        }
+    }
+
+    if (liveScript)
+    {
+        ScriptRunner runner;
+        if (!runner.load(scriptPath.c_str()))
+        {
+            std::fprintf(stderr, "Failed to load script %s\n", scriptPath.c_str());
+            if (audioDev)
+                SDL_CloseAudioDevice(audioDev);
+            SDL_Quit();
+            return 1;
+        }
+        const bool ok = runner.runLive(platform, tracker);
+        if (audioDev)
+        {
+            hostSetAudioDevice(nullptr);
+            SDL_CloseAudioDevice(audioDev);
+        }
+        SDL_Quit();
+        wav.close();
+        std::printf("Live script finished (%s)\n", ok ? "ok" : "error");
+        return ok ? 0 : 1;
     }
 
     SDL_Window* window = nullptr;
@@ -245,16 +427,72 @@ int main(int argc, char** argv)
                                   Ft812Rasterizer::kHeight * scale,
                                   SDL_WINDOW_SHOWN);
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+        // ARGB8888 matches host framebuffer uint32 0x00RRGGBB layout on little-endian.
         texture = SDL_CreateTexture(renderer,
-                                    SDL_PIXELFORMAT_RGB888,
+                                    SDL_PIXELFORMAT_ARGB8888,
                                     SDL_TEXTUREACCESS_STREAMING,
                                     Ft812Rasterizer::kWidth,
                                     Ft812Rasterizer::kHeight);
     }
 
     uint32_t lastMs = SDL_GetTicks();
+    uint32_t stressStartMs = lastMs;
+    int stressPhase = songStress ? 0 : -1;
     while (gRunning)
     {
+        // Interactive-path stress: Song + Play/Stop with window+audio (repro freezes).
+        if (stressPhase >= 0)
+        {
+            const uint32_t elapsed = SDL_GetTicks() - stressStartMs;
+            auto tap = [&](uint8_t btn) {
+                hostLockAudio();
+                platform.buttonsImpl().press(btn);
+                platform.buttonsImpl().release(btn);
+                hostUnlockAudio();
+            };
+            // 0: wait boot, 1: SONG, 2: PLAY, 3: STOP, 4: PLAY, 5: STOP, 6: done
+            if (stressPhase == 0 && elapsed > 5000)
+            {
+                tap(interfaceButtonSong);
+                stressPhase = 1;
+                stressStartMs = SDL_GetTicks();
+                std::fprintf(stderr, "song-stress: SONG\n");
+            }
+            else if (stressPhase == 1 && elapsed > 400)
+            {
+                tap(interfaceButtonPlay);
+                stressPhase = 2;
+                stressStartMs = SDL_GetTicks();
+                std::fprintf(stderr, "song-stress: PLAY1\n");
+            }
+            else if (stressPhase == 2 && elapsed > 1500)
+            {
+                tap(interfaceButtonPlay);
+                stressPhase = 3;
+                stressStartMs = SDL_GetTicks();
+                std::fprintf(stderr, "song-stress: STOP1\n");
+            }
+            else if (stressPhase == 3 && elapsed > 500)
+            {
+                tap(interfaceButtonPlay);
+                stressPhase = 4;
+                stressStartMs = SDL_GetTicks();
+                std::fprintf(stderr, "song-stress: PLAY2\n");
+            }
+            else if (stressPhase == 4 && elapsed > 1500)
+            {
+                tap(interfaceButtonPlay);
+                stressPhase = 5;
+                stressStartMs = SDL_GetTicks();
+                std::fprintf(stderr, "song-stress: STOP2\n");
+            }
+            else if (stressPhase == 5 && elapsed > 500)
+            {
+                std::fprintf(stderr, "song-stress: OK\n");
+                gRunning = false;
+            }
+        }
+
         SDL_Event ev;
         while (!headless && SDL_PollEvent(&ev))
         {
@@ -266,6 +504,10 @@ int main(int argc, char** argv)
                     continue;
                 if (ev.key.keysym.sym == SDLK_ESCAPE && ev.type == SDL_KEYDOWN)
                     gRunning = false;
+
+                // Hold audio lock only around input that mutates the engine
+                // (play/stop/notes). Do not hold it across display rebuilds.
+                hostLockAudio();
                 if (ev.key.keysym.sym == SDLK_PAGEUP && ev.type == SDL_KEYDOWN)
                     platform.encoderImpl().turn(1);
                 if (ev.key.keysym.sym == SDLK_PAGEDOWN && ev.type == SDL_KEYDOWN)
@@ -283,41 +525,84 @@ int main(int argc, char** argv)
                 }
                 else if (btn != 0xFF)
                 {
-                    if (ev.type == SDL_KEYDOWN)
+                    // Device Menu is hold-to-view; on host toggle open/close on keydown
+                    // so a tap works (Tab is also flaky under macOS SDL focus).
+                    if (btn == interfaceButtonMiniMenu)
+                    {
+                        if (ev.type == SDL_KEYDOWN)
+                        {
+                            static bool menuLatched = false;
+                            if (!menuLatched)
+                            {
+                                platform.buttonsImpl().press(btn);
+                                menuLatched = true;
+                            }
+                            else
+                            {
+                                platform.buttonsImpl().release(btn);
+                                menuLatched = false;
+                            }
+                        }
+                    }
+                    else if (btn == interfaceButtonPlay)
+                    {
+                        // Tap on keydown only — avoids stuck Play if KEYUP is missed.
+                        if (ev.type == SDL_KEYDOWN)
+                        {
+                            std::fprintf(stderr, "play-tap seq=%d\n",
+                                         (int)sequencer.getSeqState());
+                            if (platform.buttonsImpl().isButtonPressed(btn))
+                                platform.buttonsImpl().release(btn);
+                            platform.buttonsImpl().press(btn);
+                            platform.buttonsImpl().release(btn);
+                            std::fprintf(stderr, "play-tap done seq=%d\n",
+                                         (int)sequencer.getSeqState());
+                        }
+                    }
+                    else if (ev.type == SDL_KEYDOWN)
                         platform.buttonsImpl().press(btn);
                     else
                         platform.buttonsImpl().release(btn);
                 }
+                hostUnlockAudio();
             }
         }
 
+        hostLockAudio();
         platform.update();
+        hostUnlockAudio();
+        // Sequencer tick lives on the audio thread; UI update can run unlocked.
         tracker->update();
+        // Drain a few display steps — but never blow the frame budget. Doing
+        // dozens of full-screen step3 rasters per loop (old spin=24) froze the
+        // UI during play so Space KEYUP was missed and Play looked wedged.
+        {
+            const uint32_t drainStart = SDL_GetTicks();
+            for (int spin = 0; spin < 6 && !display.isIdle(); ++spin)
+            {
+                display.update();
+                if (SDL_GetTicks() - drainStart >= 8)
+                    break;
+            }
+        }
+        wavRingDrain();
 
         if (!headless && texture && renderer)
         {
             auto& eve = platform.displayImpl().rasterizer();
-            // endCoProList already renders; refresh texture each frame
-            void* pixels = nullptr;
-            int pitch = 0;
-            if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) == 0)
+            if (eve.consumeFrameDirty())
             {
-                auto* dst = static_cast<uint8_t*>(pixels);
-                const uint32_t* src = eve.pixels();
-                for (int y = 0; y < Ft812Rasterizer::kHeight; ++y)
-                {
-                    auto* row = reinterpret_cast<uint32_t*>(dst + y * pitch);
-                    for (int x = 0; x < Ft812Rasterizer::kWidth; ++x)
-                        row[x] = src[y * Ft812Rasterizer::kWidth + x];
-                }
-                SDL_UnlockTexture(texture);
+                SDL_UpdateTexture(texture,
+                                  nullptr,
+                                  eve.pixels(),
+                                  Ft812Rasterizer::kWidth * static_cast<int>(sizeof(uint32_t)));
+                SDL_RenderClear(renderer);
+                SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+                SDL_RenderPresent(renderer);
             }
-            SDL_RenderClear(renderer);
-            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-            SDL_RenderPresent(renderer);
         }
 
-        // Keep UI responsive ~60 Hz when no audio device driving time.
+        // Pace ~60 Hz; skip delay if we already spent the budget draining display.
         const uint32_t now = SDL_GetTicks();
         if (now - lastMs < 16)
             SDL_Delay(16 - (now - lastMs));
@@ -333,7 +618,12 @@ int main(int argc, char** argv)
     }
 
     if (audioDev)
+    {
+        hostSetAudioDevice(nullptr);
         SDL_CloseAudioDevice(audioDev);
+    }
+    gWavCapture.store(false);
+    wavRingDrain();
     if (texture)
         SDL_DestroyTexture(texture);
     if (renderer)

@@ -38,7 +38,7 @@ HOST_DIR := $(ROOT_DIR)/platforms/host
 
 host:
 	@echo "=================================================================="
-	@echo " Building Host Emulator (Original Tracker core on desktop)"
+	@echo " Building Host Emulator (Mini UI + Module Menu on desktop)"
 	@echo "=================================================================="
 	$(MAKE) -C "$(CORE_DIR)" -j$(NPROC) build \
 		PLATFORM=HOST PRODUCT=HOST \

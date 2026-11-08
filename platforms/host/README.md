@@ -1,8 +1,8 @@
 # Tracker CE Host Emulator
 
-Desktop build of the **Original Tracker** instrument code (`core/`) for macOS/Linux. Use it to try firmware changes without flashing hardware.
+Desktop build of the instrument code (`core/`) for macOS/Linux. Use it to try firmware changes without flashing hardware.
 
-Factory synth libraries (`synth/lib/`) are not linked. Tracker+ / Mini are out of scope for this host target.
+Built with `TRACKER_MINI` so the Module Menu (hold Menu on device; toggle with **F10** or **\`** on host) works. Factory synth libraries (`synth/lib/`) are not linked.
 
 ## Dependencies
 
@@ -37,16 +37,28 @@ Create `Projects/` and `Workspace/` under the SD folder (the host creates empty 
 
 ## Keys
 
-| Key | Action |
+Maps every Tracker Mini hardware button (plus a few direct module shortcuts).
+
+| Key | Mini button |
 | --- | --- |
 | Space | Play |
+| R | Rec |
+| C | Copy (Shift+C pastes) |
 | Shift | Shift |
 | Arrows | D-pad |
-| Enter | Insert |
+| Enter | Insert / Home |
 | Backspace / Delete | Delete |
+| N / I / O / P | Note / Instrument / FX1 / FX2 |
+| `,` `.` `;` `'` (or F9 / F11 / F12) | Function 1–4 |
+| F10 or \` | Menu (toggle on host) |
+| / | Middle (D-pad center / cycle option pages) |
+| 1–8 | Soft keys under the screen |
+| `-` / `=` | Big **−1** / **+1** |
+| `[` / `]` | Big **−10** / **+10** |
 | Page Up / Page Down | Jog wheel |
 | F1–F8 | Song, Performance, File, Config, Sample Play, Sample Edit, Instr, Master |
-| A–Z / 0–9 | Pads |
+| F13–F17 | Pattern, Sample Rec, Sample Load, Params, Game |
+| A–Z | Pads (except C/R/N/I/O/P which are reserved above) |
 | Esc | Quit |
 
 ## Script commands
@@ -62,7 +74,7 @@ screenshot out.ppm
 quit
 ```
 
-Button names: `PLAY`, `SHIFT`, `REC`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `PERFORMANCE`, `SONG`, `FILE`, `CONFIG`, `ENTER`, `INSERT`, `DELETE`, `COPY`.
+Button names: `PLAY`, `SHIFT`, `REC`, `COPY`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `ENTER`/`INSERT`, `DELETE`, `MENU`, `MIDDLE`, `FN1`–`FN4`, `NOTE`, `INSTR`, `FX1`/`VOL`, `FX2`/`FX`, `SOFT0`–`SOFT7`, `PLUS1`/`MINUS1`/`PLUS10`/`MINUS10`, `SONG`, `PERFORMANCE`, `FILE`, `CONFIG`, `PATTERN`, `SAMPLEPLAY`, `SAMPLEEDIT`, `SAMPLEREC`, `SAMPLELOAD`, `MASTER`, `PARAMS`, `GAME`.
 
 Screenshots are written as PPM (rename `.png` requests to `.ppm`).
 

@@ -1,4 +1,5 @@
-# Host desktop emulator for Original Tracker (PRODUCT=HOST / PLATFORM=HOST)
+# Host desktop emulator (PRODUCT=HOST / PLATFORM=HOST).
+# Builds with TRACKER_MINI so the hold-to-show Module Menu works.
 
 PRODUCT		?= HOST
 TRACKER_DIR	?= ../../core
@@ -44,7 +45,7 @@ INCLUDES	:= -I./source \
 		   -I$(POLYUTIL_DIR)/3rdparty \
 		   -I$(POLYSYNTH_DIR)/include
 
-DEFINES		:= -DPLATFORM_HOST -DPRODUCT_HOST -DBUILD_ID=\"host-emulator\" \
+DEFINES		:= -DPLATFORM_HOST -DPRODUCT_HOST -DTRACKER_MINI -DBUILD_ID=\"host-emulator\" \
 		   -D__MK66FX1M0__ -DF_CPU=180000000 $(FW_VERSION_DEFINES)
 
 CXXFLAGS	:= -std=gnu++20 -g -O2 -Wall -Wextra -fno-rtti -fno-exceptions \

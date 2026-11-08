@@ -86,6 +86,9 @@ DEFINES+=-DTRACKER_MINI
 else ifeq ($(PRODUCT), ORIGINAL)
 else ifeq ($(PRODUCT), PLUS)
 else ifeq ($(PRODUCT), HOST)
+# Host emulator needs the Mini module-menu popup (hold Menu on device).
+# Without TRACKER_MINI, InterfaceMenuPopup::showModulePopup is an empty stub.
+DEFINES+=-DTRACKER_MINI
 else
 $(error Invalid PRODUCT value $(PRODUCT))
 endif

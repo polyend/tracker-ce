@@ -287,9 +287,9 @@ void cList::update()
                 API_COLOR(colors[4]);
             }
 
-            char** row_text = (list->data + rowIdx);
+            char** row_text = (list->data != nullptr) ? (list->data + rowIdx) : nullptr;
 
-            if (row_text != nullptr)
+            if (row_text != nullptr && *row_text != nullptr)
             {
                 char* text = *row_text;
                 size_t textMaxWidth = list->lineWidthMax;

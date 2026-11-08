@@ -8,6 +8,12 @@ extern "C"
 #endif
     void hostDisableIrq(void);
     void hostEnableIrq(void);
+    void hostEnterAudioCallback(void);
+    void hostLeaveAudioCallback(void);
+    void hostSetAudioDevice(void* device);
+    int hostAudioIrqDisabled(void);
+    void hostLockAudio(void);
+    void hostUnlockAudio(void);
 #ifdef __cplusplus
 }
 #endif

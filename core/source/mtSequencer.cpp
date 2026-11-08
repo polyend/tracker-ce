@@ -99,13 +99,29 @@ AUDIO_CORE_RAM void Sequencer::tick(float intervalSeconds)
 
         internalTickAccumulatorUs += blockDurationUs;
 
-        while (internalTickAccumulatorUs >= uStepPeriod_us)
+        // Guard against 0/NaN/negative period (would spin forever in the host audio thread).
+        if (!(uStepPeriod_us > 0.0))
         {
-            internalTickAccumulatorUs -= uStepPeriod_us;
-            double offsetUs = blockDurationUs - internalTickAccumulatorUs;
-            midiSetClockSubBlockOffsetUs(
-              offsetUs > 0.0 ? static_cast<uint32_t>(offsetUs + 0.5) : 0U);
-            tick_uStep();
+            internalTickAccumulatorUs = 0.0;
+        }
+        else
+        {
+            // Cap steps per audio block so a tiny period can't wedge the callback.
+            constexpr int kMaxUStepsPerBlock = 512;
+            int steps = 0;
+            while (internalTickAccumulatorUs >= uStepPeriod_us && steps < kMaxUStepsPerBlock)
+            {
+                internalTickAccumulatorUs -= uStepPeriod_us;
+                double offsetUs = blockDurationUs - internalTickAccumulatorUs;
+                midiSetClockSubBlockOffsetUs(
+                  offsetUs > 0.0 ? static_cast<uint32_t>(offsetUs + 0.5) : 0U);
+                tick_uStep();
+                steps++;
+            }
+            if (steps >= kMaxUStepsPerBlock)
+            {
+                internalTickAccumulatorUs = 0.0;
+            }
         }
     }
     else
@@ -1558,6 +1574,7 @@ void Sequencer::stop(void)
     player.isStop = 1;
     player.isREC = 0;
     player.startRecOnExtClk = 0;
+    player.songMode = 0;
 
     player.uStep = 0;
     player.selectionMode = false;
@@ -3149,9 +3166,16 @@ void Sequencer::enterPerformanceMode()
 {
     player.performanceMode = 1;
 
+    // Drop any leftover sequencer-structure FX (play mode / step repeater /
+    // pattern length). Song FX scenes and prior Performance sessions can leave
+    // these set while performanceMode was off — opening Performance would then
+    // suddenly engage them and break song advance.
+    player.performance.patternLength = -1;
     for (uint8_t a = 0; a < kAllTracks; a++)
     {
         player.performance.trackLength[a] = getActualPattern()->track[0].length;
+        player.track[a].performancePlayMode = PLAYMODE_FORWARD;
+        player.track[a].performanceStepRepeater = 0;
     }
 
     if (player.onPatternOrSelectionEnd == cbkTurnOffPerformanceMode)

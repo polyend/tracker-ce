@@ -18,7 +18,8 @@
 // clang-format off
 
 #ifdef TRACKER_MINI
-constexpr uint8_t baseMenuGroupCount = 8;
+// Project, General, MIDI, Metronome, Firmware, Fn buttons, Info (no USB on Mini)
+constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
 constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_IMX)

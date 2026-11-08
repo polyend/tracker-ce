@@ -87,17 +87,21 @@ bool FileSystemImpl::mkdir(uint8_t /*hidden*/, const char* path, bool pFlag)
     if (!pFlag)
         return ::mkdir(abs.c_str(), 0755) == 0 || errno == EEXIST;
 
+    // Create each path segment without destroying separators in `cur`.
     std::string cur;
     for (size_t i = 0; i < abs.size(); ++i)
     {
         cur.push_back(abs[i]);
-        if (abs[i] == '/' || i + 1 == abs.size())
-        {
-            if (cur.size() > 1 && cur.back() == '/')
-                cur.pop_back();
-            if (!cur.empty() && cur != "/")
-                (void)::mkdir(cur.c_str(), 0755);
-        }
+        const bool atSep = abs[i] == '/';
+        const bool atEnd = i + 1 == abs.size();
+        if (!atSep && !atEnd)
+            continue;
+
+        std::string segment = cur;
+        if (segment.size() > 1 && segment.back() == '/')
+            segment.pop_back();
+        if (!segment.empty() && segment != "/")
+            (void)::mkdir(segment.c_str(), 0755);
     }
     return exists(path);
 }
@@ -172,10 +176,16 @@ std::tuple<bool, FileSystem::FileHandle> FileSystemImpl::openFile(const char* fi
                                                                   FileHandle* fileHandle)
 {
     HostFile* f = nullptr;
+    bool created = false;
     if (fileHandle && *fileHandle)
+    {
         f = asFile(*fileHandle);
+    }
     else
+    {
         f = new HostFile();
+        created = true;
+    }
 
     const char* mode = "rb";
     switch (openMode)
@@ -201,10 +211,15 @@ std::tuple<bool, FileSystem::FileHandle> FileSystemImpl::openFile(const char* fi
         f->fp = std::fopen(f->absPath.c_str(), "w+b");
     if (!f->fp)
     {
-        if (!(fileHandle && *fileHandle))
+        if (created)
             delete f;
         return { false, nullptr };
     }
+
+    // Match device FS: stash the handle so callers that pass &transferFile see it.
+    if (fileHandle && *fileHandle == nullptr)
+        *fileHandle = f;
+
     openFiles[f] = true;
     return { true, f };
 }
@@ -374,9 +389,94 @@ int FileSystemImpl::createInstrumentsList(const char* path,
                                           uint8_t list_length,
                                           uint32_t* sizeOut)
 {
+    // Match device SdDir::createInstrumentsList: files are named "N name.pti"
+    // (1-based slot). Store just the display name at list[slot-1].
     if (sizeOut)
         *sizeOut = 0;
-    return createFilesList(path, 0, list, list_length, 0, enListFileFilter_wave_inst);
+    if (!list || list_length == 0)
+        return 0;
+
+    for (uint8_t i = 0; i < list_length; ++i)
+    {
+        if (list[i] != nullptr)
+        {
+            delete[] list[i];
+            list[i] = nullptr;
+        }
+    }
+
+    DIR* dir = opendir(resolve(path).c_str());
+    if (!dir)
+        return kListError;
+
+    int found = 0;
+    const std::string base = (path && path[0]) ? path : "/";
+
+    while (dirent* ent = readdir(dir))
+    {
+        if (ent->d_name[0] == '.')
+            continue;
+
+        std::string child = base;
+        if (child.back() != '/')
+            child.push_back('/');
+        child += ent->d_name;
+
+        struct stat st{};
+        if (::stat(resolve(child.c_str()).c_str(), &st) != 0 || S_ISDIR(st.st_mode))
+            continue;
+
+        const char* fname = ent->d_name;
+        const int nameLen = static_cast<int>(std::strlen(fname));
+        if (nameLen < 5)
+            continue;
+        if (!endsWithIgnoreCase(fname, ".pti"))
+            continue;
+
+        const char* p = fname;
+        int idx1 = -1;
+        int idx2 = -1;
+        if (*p >= '0' && *p <= '9')
+            idx1 = *p - '0';
+        else
+            continue;
+        ++p;
+        if (*p >= '0' && *p <= '9')
+        {
+            idx2 = *p - '0';
+            ++p;
+        }
+        if (*p != ' ')
+            continue;
+        ++p;
+
+        if (idx2 >= 0)
+            idx1 = idx1 * 10 + idx2;
+        if (idx1 < 1 || idx1 > static_cast<int>(list_length))
+            continue;
+
+        const int slot = idx1 - 1;
+        if (list[slot] != nullptr)
+            continue;
+
+        // Strip trailing ".pti"
+        int len = nameLen - static_cast<int>(p - fname) - 4;
+        if (len < 0)
+            len = 0;
+        list[slot] = new char[static_cast<size_t>(len) + 1];
+        if (len > 0)
+            std::strncpy(list[slot], p, static_cast<size_t>(len));
+        list[slot][len] = '\0';
+
+        if (sizeOut)
+            *sizeOut += static_cast<uint32_t>(st.st_size);
+        ++found;
+        if (found >= list_length)
+            break;
+    }
+
+    closedir(dir);
+    return found;
 }
 
 int FileSystemImpl::countContainedFiles(const char* path)
@@ -395,6 +495,30 @@ int FileSystemImpl::countContainedFiles(const char* path)
     return count;
 }
 
+int FileSystemImpl::countFilteredInDir(const char* path, enListFileFilter filter) const
+{
+    DIR* dir = opendir(resolve(path).c_str());
+    if (!dir)
+        return 0;
+    int count = 0;
+    while (dirent* ent = readdir(dir))
+    {
+        if (ent->d_name[0] == '.')
+            continue;
+        std::string child = path ? path : "/";
+        if (child.empty() || child.back() != '/')
+            child.push_back('/');
+        child += ent->d_name;
+        struct stat st{};
+        const bool isDir =
+          (::stat(resolve(child.c_str()).c_str(), &st) == 0 && S_ISDIR(st.st_mode));
+        if (matchFilter(filter, ent->d_name, isDir))
+            ++count;
+    }
+    closedir(dir);
+    return count;
+}
+
 int FileSystemImpl::createFilesList(const char* path,
                                     uint8_t start_line,
                                     char** list,
@@ -402,42 +526,100 @@ int FileSystemImpl::createFilesList(const char* path,
                                     uint16_t /*max_used_memory*/,
                                     enListFileFilter filter,
                                     uint16_t skip_count,
-                                    uint16_t /*max_files_in_subdir*/,
-                                    enListFileFilter /*folderSizeFilter*/)
+                                    uint16_t max_files_in_subdir,
+                                    enListFileFilter folderSizeFilter)
 {
+    // Match device SdDir::createFilesList: allocate list[i] with new char[],
+    // prefix folders with '/', start filling at start_line, return end index.
     if (!list || list_length == 0)
         return 0;
+
+    for (uint8_t i = 0; i < list_length; ++i)
+    {
+        if (list[i] != nullptr)
+        {
+            delete[] list[i];
+            list[i] = nullptr;
+        }
+    }
 
     DIR* dir = opendir(resolve(path).c_str());
     if (!dir)
         return kListError;
 
-    std::vector<std::string> names;
-    while (dirent* ent = readdir(dir))
+    uint8_t n = start_line;
+    const std::string base = (path && path[0]) ? path : "/";
+
+    while (n < list_length)
     {
+        dirent* ent = readdir(dir);
+        if (!ent)
+            break;
         if (ent->d_name[0] == '.')
             continue;
-        std::string child = std::string(path) + "/" + ent->d_name;
+
+        std::string child = base;
+        if (child.back() != '/')
+            child.push_back('/');
+        child += ent->d_name;
+
         struct stat st{};
         const bool isDir =
           (::stat(resolve(child.c_str()).c_str(), &st) == 0 && S_ISDIR(st.st_mode));
         if (!matchFilter(filter, ent->d_name, isDir))
             continue;
-        names.emplace_back(ent->d_name);
-    }
-    closedir(dir);
-    std::sort(names.begin(), names.end());
 
-    int written = 0;
-    size_t idx = static_cast<size_t>(start_line) + skip_count;
-    while (idx < names.size() && written < list_length)
-    {
-        if (list[written])
-            std::strncpy(list[written], names[idx].c_str(), 79);
-        ++written;
-        ++idx;
+        if (skip_count > 0)
+        {
+            --skip_count;
+            continue;
+        }
+
+        if (isDir)
+        {
+            const size_t nameLen = std::strlen(ent->d_name);
+            int filesCount = 0;
+            if (max_files_in_subdir != 0)
+                filesCount = countFilteredInDir(child.c_str(), folderSizeFilter);
+
+            if (max_files_in_subdir != 0 && filesCount > static_cast<int>(max_files_in_subdir))
+            {
+                uint16_t offset = 0;
+                while (filesCount > 0 && n < list_length)
+                {
+                    // "/name (start-end)" — generous buffer like device
+                    const size_t len = nameLen + 4 + 2 * 5 + 8;
+                    list[n] = new char[len];
+                    std::snprintf(list[n],
+                                  len,
+                                  "/%s (%u-%u)",
+                                  ent->d_name,
+                                  static_cast<unsigned>(offset + 1),
+                                  static_cast<unsigned>(offset + max_files_in_subdir));
+                    filesCount -= static_cast<int>(max_files_in_subdir);
+                    offset = static_cast<uint16_t>(offset + max_files_in_subdir);
+                    ++n;
+                }
+            }
+            else
+            {
+                list[n] = new char[nameLen + 2];
+                list[n][0] = '/';
+                std::strcpy(list[n] + 1, ent->d_name);
+                ++n;
+            }
+        }
+        else
+        {
+            const size_t nameLen = std::strlen(ent->d_name);
+            list[n] = new char[nameLen + 1];
+            std::strcpy(list[n], ent->d_name);
+            ++n;
+        }
     }
-    return written;
+
+    closedir(dir);
+    return n;
 }
 
 void FileSystemImpl::listDirContents(const char* dirpath,

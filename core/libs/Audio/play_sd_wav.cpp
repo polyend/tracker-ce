@@ -53,6 +53,7 @@ AUDIO_CORE_FLASH bool AudioPlaySdWav::play(const char* filename, uint16_t from, 
 
 AUDIO_CORE_FLASH void AudioPlaySdWav::stop(void)
 {
+    bool closeStream = false;
     DISABLE_GLOBAL_INTERRUPTS();
     if (state == STATE_PLAY)
     {
@@ -65,12 +66,15 @@ AUDIO_CORE_FLASH void AudioPlaySdWav::stop(void)
             }
         }
         state = STATE_STOP;
-        sdStream->endCurrentStream();
-        ENABLE_GLOBAL_INTERRUPTS();
+        // Close the file outside the IRQ lock. Holding hostDisableIrq across
+        // fclose deadlocks the SDL audio thread (same mutex as allocate/release).
+        closeStream = true;
     }
-    else
+    ENABLE_GLOBAL_INTERRUPTS();
+
+    if (closeStream)
     {
-        ENABLE_GLOBAL_INTERRUPTS();
+        sdStream->endCurrentStream();
     }
 }
 
