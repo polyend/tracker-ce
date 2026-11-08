@@ -167,33 +167,6 @@ void TrackerImpl::update()
     newFileManager.update();
     featureModules.updateAll();
 
-    // Dispatch song-list column slot starts on the main thread.
-    // playlistPos is updated from the audio path; latch changes here.
-    {
-        static bool wasPlayingSong = false;
-        static int16_t lastRecalledSongSlot = -1;
-
-        SongListColumn* column = featureModules.getSongListColumn();
-        // Performance Mode reports SEQ_STATE_PLAY_PERFORMANCE even while songMode is on.
-        const bool playingSong = sequencer.isPlay() && sequencer.isSongMode();
-
-        if (column != nullptr && playingSong)
-        {
-            const uint8_t songSlot = mtProject.song.playlistPos;
-            if (!wasPlayingSong || lastRecalledSongSlot != static_cast<int16_t>(songSlot))
-            {
-                lastRecalledSongSlot = songSlot;
-                column->onSlotStart(songSlot);
-            }
-            wasPlayingSong = true;
-        }
-        else
-        {
-            wasPlayingSong = false;
-            lastRecalledSongSlot = -1;
-        }
-    }
-
     mtInterface.update();
     engine.updateSdStream();
     sequencer.update();

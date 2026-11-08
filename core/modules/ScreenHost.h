@@ -66,4 +66,8 @@ class ScreenExtension
 // Firmware-provided host for Song Mode list columns.
 SongScreenHost& getSongScreenHost();
 
+// Main-thread only. Latches song playlist position during playback and
+// dispatches SongListColumn::onSlotStart. Called from FeatureModuleRegistry::updateAll.
+void pollSongListColumnSlotStarts();
+
 #endif /* MODULES_SCREENHOST_H_ */

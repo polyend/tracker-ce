@@ -72,6 +72,8 @@ void FeatureModuleRegistry::updateAll()
     {
         modules[i]->update();
     }
+
+    pollSongListColumnSlotStarts();
 }
 
 uint8_t FeatureModuleRegistry::performancePageCount() const

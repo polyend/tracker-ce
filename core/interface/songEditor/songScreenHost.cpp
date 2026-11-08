@@ -1,6 +1,9 @@
 #include "ScreenHost.h"
 
+#include "FeatureModuleRegistry.h"
 #include "core/interfaceDefs.h"
+#include "mtSequencer.h"
+#include "mtStructs.h"
 #include "songEditor/songEditor.h"
 
 class SongScreenHostImpl : public SongScreenHost
@@ -26,4 +29,29 @@ static SongScreenHostImpl s_songScreenHost;
 SongScreenHost& getSongScreenHost()
 {
     return s_songScreenHost;
+}
+
+void pollSongListColumnSlotStarts()
+{
+    static bool wasPlayingSong = false;
+    static int16_t lastRecalledSongSlot = -1;
+
+    SongListColumn* column = featureModules.getSongListColumn();
+    // Performance Mode reports SEQ_STATE_PLAY_PERFORMANCE even while songMode is on.
+    const bool playingSong = sequencer.isPlay() && sequencer.isSongMode();
+
+    if (column != nullptr && playingSong)
+    {
+        const uint8_t songSlot = mtProject.song.playlistPos;
+        if (!wasPlayingSong || lastRecalledSongSlot != static_cast<int16_t>(songSlot))
+        {
+            lastRecalledSongSlot = songSlot;
+            column->onSlotStart(songSlot);
+        }
+        wasPlayingSong = true;
+        return;
+    }
+
+    wasPlayingSong = false;
+    lastRecalledSongSlot = -1;
 }
