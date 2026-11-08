@@ -1,0 +1,13 @@
+# Shorter live-audio repro for song play/stop/replay
+wait 800
+tap SONG
+wait 200
+tap PLAY
+wait 600
+tap PLAY
+wait 200
+tap PLAY
+wait 600
+tap PLAY
+wait 200
+quit

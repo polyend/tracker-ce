@@ -165,9 +165,8 @@ void cMasterParams::update()
         gainReduceHandler();
     }
 
-    // gdyby byla taka potrzeba mozna sprobowac tu odswiezac rowniez levele, a obliczac w kazdej
-    // petli
-    if (refreshTimer < 50)
+    // Level meters: redraw near display rate so bars track audio closely.
+    if (refreshTimer < 16)
         return;
     refreshTimer = 0;
 
@@ -1652,11 +1651,13 @@ void cMasterParams::calcLevel(strTrackLevel* level, float value)
     level->measureSum += value;
     level->measureCounter++;
 
-    if (level->measureCounter == 10)
+    // Average a short window so meters stay smooth but still follow transients.
+    constexpr uint8_t kLevelMeasureWindow = 2;
+    if (level->measureCounter == kLevelMeasureWindow)
     {
         level->measureCounter = 0;
 
-        float averageMeasure = level->measureSum / 10.0f;
+        float averageMeasure = level->measureSum / static_cast<float>(kLevelMeasureWindow);
         int16_t averageMeasureInDecibels = (averageMeasure > 0.0f)
                                              ? 10 * log10f(averageMeasure / RMS_LEVEL_0DB)
                                              : LOW_MIXER_LEVEL_IN_DECIBELS;

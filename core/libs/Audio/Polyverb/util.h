@@ -37,9 +37,17 @@
 
 inline int32_t Clip16(int32_t x)
 {
+#if defined(PLATFORM_HOST)
+    if (x > 32767)
+        return 32767;
+    if (x < -32768)
+        return -32768;
+    return x;
+#else
     int32_t result;
     __asm("ssat %0, %1, %2" : "=r"(result) : "I"(16), "r"(x));
     return result;
+#endif
 }
 
 #define MAKE_INTEGRAL_FRACTIONAL(x)                                                                \

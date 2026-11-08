@@ -1,0 +1,9 @@
+# Headless smoke script for the Tracker CE host emulator.
+# Boots past the start screen (~2s gated progress), taps Play, screenshots, quits.
+
+wait 3000
+screenshot boot.ppm
+tap PLAY
+wait 500
+screenshot after_play.ppm
+quit

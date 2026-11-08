@@ -102,7 +102,8 @@ class SongFxScenes : public FeatureModule,
     void clampSongSlotScenes();
     void assignSlot(uint8_t slot, uint8_t scene);
     uint8_t sceneForSlot(uint8_t slot) const;
-    void applyScene(uint8_t sceneIndex); // 0..7
+    void clearAllPerformanceFx();
+    void applyScene(uint8_t sceneIndex); // 0..7 — clears all FX, then applies scene
     void refreshEditorUi(SongScreenHost& host);
     void formatEntryName(uint8_t entry, char* out, uint8_t outSize) const;
     void formatEntryValue(uint8_t entry, char* out, uint8_t outSize) const;

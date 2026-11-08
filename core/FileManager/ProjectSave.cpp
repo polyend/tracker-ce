@@ -488,7 +488,7 @@ bool ProjectSave::copyInstruments(int idx, uint8_t& copyState)
             return true;
         }
 
-        uint8_t* dataSourceAddress = (uint8_t*)mtProject.instrument[idx].sample.address;
+        uint8_t* dataSourceAddress = reinterpret_cast<uint8_t*>(static_cast<int16_t*>(mtProject.instrument[idx].sample.address));
 
         uint8_t saveStatus = fileTransfer.saveSampleRawDataToFile(
           dataSourceAddress, dataSizeBytes, destInstrFilePath, sizeof(strInstrumentFile));

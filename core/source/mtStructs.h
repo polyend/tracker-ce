@@ -3,6 +3,8 @@
 
 #include "config.h"
 #include "mtEnvelopeGenerator.h"
+#include <cstddef>
+#include <cstdint>
 #include <stdint.h>
 
 //=====================================================================
@@ -599,6 +601,88 @@ enum SaturationType
 //----------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------
+#if defined(PLATFORM_HOST)
+// Keep the on-device 4-byte pointer field on 64-bit hosts by storing an offset into
+// externalRamSampleMemory. Implicit conversions preserve existing call sites.
+extern int16_t externalRamSampleMemory[];
+struct SampleMemPtr
+{
+    // 0 = nullptr; otherwise 1-based index into externalRamSampleMemory.
+    uint32_t offset = 0;
+
+    SampleMemPtr() = default;
+    SampleMemPtr(std::nullptr_t) : offset(0) {}
+    SampleMemPtr(int16_t* p)
+    {
+        if (p == nullptr)
+            offset = 0;
+        else
+            offset = static_cast<uint32_t>(p - externalRamSampleMemory) + 1u;
+    }
+    SampleMemPtr& operator=(std::nullptr_t)
+    {
+        offset = 0;
+        return *this;
+    }
+    SampleMemPtr& operator=(int16_t* p)
+    {
+        *this = SampleMemPtr(p);
+        return *this;
+    }
+    operator int16_t*() const
+    {
+        return offset == 0 ? nullptr : (externalRamSampleMemory + (offset - 1u));
+    }
+    int16_t& operator*() const { return *static_cast<int16_t*>(*this); }
+    int16_t* operator->() const { return static_cast<int16_t*>(*this); }
+    explicit operator bool() const { return offset != 0; }
+    SampleMemPtr operator+(int32_t n) const
+    {
+        if (offset == 0)
+            return SampleMemPtr(nullptr);
+        SampleMemPtr r;
+        r.offset = offset + static_cast<uint32_t>(n);
+        return r;
+    }
+    SampleMemPtr operator+(uint32_t n) const { return *this + static_cast<int32_t>(n); }
+    SampleMemPtr operator+(size_t n) const { return *this + static_cast<uint32_t>(n); }
+    SampleMemPtr& operator+=(int32_t n)
+    {
+        *this = *this + n;
+        return *this;
+    }
+    friend SampleMemPtr operator+(int32_t n, SampleMemPtr p) { return p + n; }
+    friend SampleMemPtr operator+(uint32_t n, SampleMemPtr p) { return p + n; }
+    friend ptrdiff_t operator-(SampleMemPtr a, int16_t* b)
+    {
+        return static_cast<int16_t*>(a) - b;
+    }
+    friend ptrdiff_t operator-(int16_t* a, SampleMemPtr b)
+    {
+        return a - static_cast<int16_t*>(b);
+    }
+    friend ptrdiff_t operator-(SampleMemPtr a, SampleMemPtr b)
+    {
+        return static_cast<int16_t*>(a) - static_cast<int16_t*>(b);
+    }
+    friend bool operator==(SampleMemPtr a, int16_t* b) { return static_cast<int16_t*>(a) == b; }
+    friend bool operator!=(SampleMemPtr a, int16_t* b) { return !(a == b); }
+    friend bool operator==(int16_t* a, SampleMemPtr b) { return b == a; }
+    friend bool operator!=(int16_t* a, SampleMemPtr b) { return !(b == a); }
+    friend bool operator>=(SampleMemPtr a, int16_t* b) { return static_cast<int16_t*>(a) >= b; }
+    friend bool operator<(SampleMemPtr a, int16_t* b) { return static_cast<int16_t*>(a) < b; }
+    friend bool operator>(SampleMemPtr a, int16_t* b) { return static_cast<int16_t*>(a) > b; }
+    friend bool operator<=(SampleMemPtr a, int16_t* b) { return static_cast<int16_t*>(a) <= b; }
+};
+static_assert(sizeof(SampleMemPtr) == 4, "SampleMemPtr must match ARM pointer size");
+using SampleAddress = SampleMemPtr;
+#else
+using SampleAddress = int16_t*;
+#endif
+
+#if defined(PLATFORM_HOST)
+#pragma pack(push, 4)
+#endif
 struct strInstrument
 {
     uint8_t isActive;
@@ -608,7 +692,7 @@ struct strInstrument
         uint8_t type; //;
         char file_name[32];
 
-        int16_t* address;
+        SampleAddress address;
         uint32_t length; // = 0;
 
         uint16_t wavetable_window_size; // = 2048;
@@ -730,6 +814,9 @@ struct strInstrument
         }
     }
 };
+#if defined(PLATFORM_HOST)
+#pragma pack(pop)
+#endif
 static_assert(sizeof(strInstrument) == 372, "strInstrument size must remain 372 bytes");
 
 //----------------------------------------------------------------------------------

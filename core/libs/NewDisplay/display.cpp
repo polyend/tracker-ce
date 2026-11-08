@@ -976,9 +976,21 @@ void cDisplay::processDisplayUpdateImmediate()
 
     uint8_t queuePosition = refreshQueueTop;
 
-    while (refreshQueueBott != queuePosition && refreshQueueTop != refreshQueueBott)
+    // Bound the spin: a stuck co-pro / invalid queue entry used to hang forever
+    // (force-quit on host after song play/stop UI refresh).
+    constexpr int kMaxImmediateSteps = controlsRefreshQueueSize * 8;
+    for (int steps = 0;
+         steps < kMaxImmediateSteps && refreshQueueBott != queuePosition &&
+         refreshQueueTop != refreshQueueBott;
+         ++steps)
     {
+        const uint8_t bottBefore = refreshQueueBott;
+        const uint8_t stepBefore = updateStep;
         update();
+        if (refreshQueueBott == bottBefore && updateStep == stepBefore)
+        {
+            break; // no progress — avoid wedging the UI thread
+        }
     }
 }
 

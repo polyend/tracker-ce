@@ -1,0 +1,10 @@
+# Load song view, play song, open performance, keep running through a pattern boundary
+wait 2500
+tap SONG
+wait 400
+tap PLAY
+wait 800
+tap PERFORMANCE
+wait 8000
+screenshot /tmp/tracker-song-perf.ppm
+quit

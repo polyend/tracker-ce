@@ -137,6 +137,10 @@ void cSongEditor::update()
         {
             hideIcon();
             songPlayerData.progress.isPlaying = 0;
+            // Snap the playlist scroller so autoRefresh animation can't run forever
+            // after stop (host UI becomes unresponsive / needs force-quit).
+            patternsList.start = selectedSongPosition;
+            display.setControlValue(songPlayerControl, selectedSongPosition);
         }
         else
         {
@@ -500,6 +504,7 @@ void playSongFromSelectedPattern_stop()
 {
     SE->lastSongListPos = -1;
     sequencer.stop();
+    SE->stopSongPlayer();
     SE->hideIcon();
     if (performanceMode.turnOff())
     {
@@ -839,7 +844,14 @@ static void functEncoder(int16_t value)
 
     if (SE->activeModePage != nullptr)
     {
-        const int8_t step = value > 0 ? 1 : (value < 0 ? -1 : 0);
+        // Pass magnitude through so Mini +10/-10 (and host ]/[) jump by 10.
+        int8_t step = 0;
+        if (value > 127)
+            step = 127;
+        else if (value < -128)
+            step = -128;
+        else
+            step = static_cast<int8_t>(value);
         SE->handleModePageEncoder(step);
         return;
     }

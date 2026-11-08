@@ -1,0 +1,12 @@
+# Play song, open performance, return to song, keep playing through boundaries
+wait 2500
+tap SONG
+wait 400
+tap PLAY
+wait 600
+tap PERFORMANCE
+wait 2000
+tap SONG
+wait 6000
+screenshot /tmp/tracker-perf-back-song.ppm
+quit

@@ -1,0 +1,15 @@
+#ifndef SOURCE_LOG_H_
+#define SOURCE_LOG_H_
+
+extern void _debuglog(const char* msg);
+extern void _debuglogf(const char* format, ...);
+
+#ifdef DEBUG
+#define LOG(msg) (_debuglog(msg))
+#define LOGF(format, ...) _debuglogf(format, __VA_ARGS__)
+#else
+#define LOG(msg)
+#define LOGF(format, ...)
+#endif
+
+#endif

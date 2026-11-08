@@ -325,12 +325,25 @@ void SongFxScenes::clearAll()
     saveToWorkspace();
 }
 
+void SongFxScenes::clearAllPerformanceFx()
+{
+    PerformancePageHost& host = getPerformancePageHost();
+    const uint8_t count = host.performanceFxCount();
+    for (uint8_t fxId = 1; fxId < count; fxId++)
+    {
+        host.clearPerformanceFx(fxId);
+    }
+}
+
 void SongFxScenes::applyScene(uint8_t sceneIndex)
 {
     if (sceneIndex >= kSongFxScenesCount)
     {
         return;
     }
+
+    // Replace prior row FX entirely — clear everything, then apply this scene.
+    clearAllPerformanceFx();
 
     PerformancePageHost& host = getPerformancePageHost();
     const strSongFxScene& scene = externalRamSongFxScenesBank.scenes[sceneIndex];
@@ -350,6 +363,8 @@ void SongFxScenes::onSlotStart(uint8_t slot)
     const uint8_t scene = sceneForSlot(slot);
     if (scene == kSongFxScenesNone || scene > kSongFxScenesCount)
     {
+        // Row with "-" still clears leftover FX from the previous scene.
+        clearAllPerformanceFx();
         return;
     }
     applyScene(static_cast<uint8_t>(scene - 1));
@@ -598,9 +613,14 @@ uint8_t SongFxScenes::nextFxId(uint8_t current, int8_t delta) const
         return current;
     }
 
-    for (uint8_t guard = 0; guard < count; guard++)
+    // Honor |delta| so +10/-10 skip that many named FX types.
+    int16_t steps = delta > 0 ? delta : static_cast<int16_t>(-delta);
+    int16_t found = 0;
+    uint8_t lastNamed = current;
+    const uint8_t dir = delta > 0 ? 1 : 0;
+    for (uint16_t guard = 0; guard < static_cast<uint16_t>(count) * static_cast<uint16_t>(steps); guard++)
     {
-        id += delta > 0 ? 1 : -1;
+        id += dir ? 1 : -1;
         if (id < minId)
         {
             id = maxId;
@@ -611,11 +631,16 @@ uint8_t SongFxScenes::nextFxId(uint8_t current, int8_t delta) const
         }
         if (isNamed(static_cast<uint8_t>(id)))
         {
-            return static_cast<uint8_t>(id);
+            lastNamed = static_cast<uint8_t>(id);
+            found++;
+            if (found >= steps)
+            {
+                return lastNamed;
+            }
         }
     }
 
-    return current;
+    return lastNamed;
 }
 
 int16_t SongFxScenes::clampFxValue(uint8_t fxId, int16_t value) const

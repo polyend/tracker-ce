@@ -21,10 +21,17 @@
 
 //-----------------------------------  EXTERNAL RAM CONFIGURATION --------------------------------
 // clang-format off
+#if defined(PLATFORM_HOST)
+int16_t externalRamSampleMemory[SAMPLE_MEMORY_SIZE / 2];
+int16_t externalRamDelayBuff[DELAY_MEMORY_SIZE / 2];
+uint16_t externalRamReverbBuff[REVERB_MEMORY_SIZE / 2];
+alignas(32) uint8_t externalRamScratchBuff[SHARED_SCRATCH_MEMORY_SIZE];
+#else
 __attribute__((section(".sample_memory"), used)) int16_t externalRamSampleMemory[SAMPLE_MEMORY_SIZE / 2];
 __attribute__((section(".delay_memory"), used)) int16_t externalRamDelayBuff[DELAY_MEMORY_SIZE / 2];
 __attribute__((section(".reverb_memory"), used)) uint16_t externalRamReverbBuff[REVERB_MEMORY_SIZE / 2];
 __attribute__((section(".scratch_memory"), aligned(32), used)) uint8_t externalRamScratchBuff[SHARED_SCRATCH_MEMORY_SIZE];
+#endif
 
 // clang-format on
 int16_t* externalRamEffectsBuff = externalRamSampleMemory + (EDIT_BUFF_OFFSET / 2);

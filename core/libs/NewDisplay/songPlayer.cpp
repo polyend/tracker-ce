@@ -105,6 +105,16 @@ void cSongPlayer::setValue(int value)
         listPosition = value;
         disableBar = 0;
     }
+
+    // While stopped, skip scroll animation — a stuck autoRefresh loop freezes the host UI.
+    // Must also resync barPos/textListPos or the pattern/FX selection lands on the wrong row.
+    if (controlData != nullptr && controlData->progress.isPlaying == 0 && list != nullptr)
+    {
+        list->start = listPosition;
+        listAnimationStep = 0;
+        autoRefresh = false;
+        syncListWindow();
+    }
 }
 
 void cSongPlayer::setColors(const uint32_t* colors)
@@ -112,21 +122,11 @@ void cSongPlayer::setColors(const uint32_t* colors)
     this->colors = colors;
 }
 
-void cSongPlayer::setData(void* data)
+void cSongPlayer::syncListWindow()
 {
-    controlData = (player_data_t*)data;
-
-    list = controlData->list;
-    if (list->start < 0)
+    if (list == nullptr)
     {
-        list->start = 0;
-        listPosition = 0;
-        disableBar = 1;
-    }
-    else
-    {
-        listPosition = list->start;
-        disableBar = 0;
+        return;
     }
 
     if (listPosition == 0) // pierwsza pozycja listy*
@@ -159,6 +159,26 @@ void cSongPlayer::setData(void* data)
              ? (listPosition > list->linesCount - 2 ? listPosition - (list->linesCount - 2) : 0)
              : 0);
     }
+}
+
+void cSongPlayer::setData(void* data)
+{
+    controlData = (player_data_t*)data;
+
+    list = controlData->list;
+    if (list->start < 0)
+    {
+        list->start = 0;
+        listPosition = 0;
+        disableBar = 1;
+    }
+    else
+    {
+        listPosition = list->start;
+        disableBar = 0;
+    }
+
+    syncListWindow();
 }
 
 //--------------------------------------------------------------------------------
@@ -274,33 +294,50 @@ void cSongPlayer::showList()
         listAnimationStep = 0;
         autoRefresh = false;
 
-        if (!disableBar && !listColumnFocused)
+        if (!disableBar)
         {
-            x_pos = posX + 3;
             y_pos = posY + (barPos * h_row);
 
             // ramka
-            if (controlData->isListActive == 0)
+            if (listColumnFocused)
             {
-                API_COLOR(colors[1]); // bialy - nie aktywny
-            }
-            else if (*controlData->isEditMode == 1)
-            {
-                API_COLOR(colors[5]); // one_true_red
+                API_COLOR(*controlData->isEditMode == 1 ? colors[5] : colors[9]);
+                x_pos = columnX - 16;
+                const int16_t cellW = 32;
+                API_LINE_WIDTH(kRedFrameWidth);
+                API_BEGIN(LINE_STRIP);
+                API_VERTEX2F(x_pos, y_pos);
+                API_VERTEX2F(x_pos + cellW, y_pos);
+                API_VERTEX2F(x_pos + cellW, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos);
+                API_END();
             }
             else
             {
-                API_COLOR(colors[9]);
-            }
+                x_pos = posX + 3;
+                if (controlData->isListActive == 0)
+                {
+                    API_COLOR(colors[1]); // bialy - nie aktywny
+                }
+                else if (*controlData->isEditMode == 1)
+                {
+                    API_COLOR(colors[5]); // one_true_red
+                }
+                else
+                {
+                    API_COLOR(colors[9]);
+                }
 
-            API_LINE_WIDTH(kRedFrameWidth);
-            API_BEGIN(LINE_STRIP);
-            API_VERTEX2F(x_pos, y_pos);
-            API_VERTEX2F(x_pos + w_selection, y_pos);
-            API_VERTEX2F(x_pos + w_selection, y_pos + h_row);
-            API_VERTEX2F(x_pos, y_pos + h_row);
-            API_VERTEX2F(x_pos, y_pos);
-            API_END();
+                API_LINE_WIDTH(kRedFrameWidth);
+                API_BEGIN(LINE_STRIP);
+                API_VERTEX2F(x_pos, y_pos);
+                API_VERTEX2F(x_pos + w_selection, y_pos);
+                API_VERTEX2F(x_pos + w_selection, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos);
+                API_END();
+            }
         }
 
         // lista tekstow
@@ -445,9 +482,8 @@ void cSongPlayer::showList()
 
         autoRefresh = true;
 
-        if (!disableBar && !listColumnFocused)
+        if (!disableBar)
         {
-            x_pos = posX + 3;
             y_pos = posY + (barPos * h_row) + (mode ? 0 : listAnimationStep);
             if (list->length > list->linesCount)
             {
@@ -460,28 +496,46 @@ void cSongPlayer::showList()
                 }
             }
 
-            // ramka
-            if (controlData->isListActive == 0)
+            if (listColumnFocused)
             {
-                API_COLOR(colors[1]); // bialy - nie aktywny
-            }
-            else if (*controlData->isEditMode == 1)
-            {
-                API_COLOR(colors[5]); // one_true_red
+                API_COLOR(*controlData->isEditMode == 1 ? colors[5] : colors[9]);
+                x_pos = columnX - 16;
+                const int16_t cellW = 32;
+                API_LINE_WIDTH(kRedFrameWidth);
+                API_BEGIN(LINE_STRIP);
+                API_VERTEX2F(x_pos, y_pos);
+                API_VERTEX2F(x_pos + cellW, y_pos);
+                API_VERTEX2F(x_pos + cellW, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos);
+                API_END();
             }
             else
             {
-                API_COLOR(colors[9]);
-            }
+                x_pos = posX + 3;
+                // ramka
+                if (controlData->isListActive == 0)
+                {
+                    API_COLOR(colors[1]); // bialy - nie aktywny
+                }
+                else if (*controlData->isEditMode == 1)
+                {
+                    API_COLOR(colors[5]); // one_true_red
+                }
+                else
+                {
+                    API_COLOR(colors[9]);
+                }
 
-            API_LINE_WIDTH(kRedFrameWidth);
-            API_BEGIN(LINE_STRIP);
-            API_VERTEX2F(x_pos, y_pos);
-            API_VERTEX2F(x_pos + w_selection, y_pos);
-            API_VERTEX2F(x_pos + w_selection, y_pos + h_row);
-            API_VERTEX2F(x_pos, y_pos + h_row);
-            API_VERTEX2F(x_pos, y_pos);
-            API_END();
+                API_LINE_WIDTH(kRedFrameWidth);
+                API_BEGIN(LINE_STRIP);
+                API_VERTEX2F(x_pos, y_pos);
+                API_VERTEX2F(x_pos + w_selection, y_pos);
+                API_VERTEX2F(x_pos + w_selection, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos + h_row);
+                API_VERTEX2F(x_pos, y_pos);
+                API_END();
+            }
         }
 
         x_pos = posX + 7;

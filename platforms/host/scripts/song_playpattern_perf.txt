@@ -1,0 +1,11 @@
+# Song play, tap soft0 (Play Pattern) while playing, then open Performance
+wait 2500
+tap SONG
+wait 400
+tap PLAY
+wait 500
+tap SOFT0
+wait 200
+tap PERFORMANCE
+wait 3000
+quit

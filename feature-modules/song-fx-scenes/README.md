@@ -16,9 +16,9 @@ This is **not** Performance FX Scenes (rack snapshots). It does not share `perfs
 
 Each of 8 scenes holds up to 8 entries `{fxId, value}` chosen from the live Performance engine FX catalog (Volume, filters, sends, stutter, …).
 
-When a song playlist row starts (or Pattern Step FX `N` fires), every filled entry is applied via the Performance engine (`applyPerformanceFx`) with **no display refresh**.
+When a song playlist row starts (or Pattern Step FX `N` fires), all Performance-engine FX are cleared first, then every filled entry in the scene is applied (`applyPerformanceFx`) with **no display refresh**.
 
-Apply is **additive**: only non-empty list entries are written. Unlike Performance **Scenes** (full rack snapshot), omitted FX slots are left as-is. A row start and a step-1 `N` on the same moment can both fire — that is intentional.
+A row with FX `-` still clears leftover FX from the previous scene. A row start and a step-1 `N` on the same moment can both fire — that is intentional.
 
 ## How to use it on the device
 
@@ -38,7 +38,8 @@ The FX column is only selectable (red frame) while Rec is on. It is hidden on th
 3. The main list shows FX name + value rows for that scene:
    - **Up** / **Down**: move focus between rows
    - **Left** / **Right**: select FX type (name) or value field (frame moves)
-   - **+** / **−** (or encoder): cycle the selected field
+   - **+1** / **−1** or encoder: cycle the selected field
+   - **+10** / **−10**: jump by 10 (host: `]` / `[`)
    - **Delete**: clear the focused entry
 4. **Insert**, or switch back to the playlist Song page, to leave the editor
 
