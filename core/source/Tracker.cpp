@@ -15,6 +15,7 @@
 #include "mtSequencer.h"
 #include "mtSleep.h"
 #include "mtSliceDetector.h"
+#include "mtStructs.h"
 
 #include <cr_section_macros.h>
 
@@ -165,6 +166,7 @@ void TrackerImpl::update()
     sliceDetector.update();
     newFileManager.update();
     featureModules.updateAll();
+
     mtInterface.update();
     engine.updateSdStream();
     sequencer.update();

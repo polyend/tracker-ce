@@ -195,6 +195,16 @@ void cSongPlayer::update()
     API_COLOR(colors[0]);
     API_CMD_TEXT(600, posY + 30, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, "Pattern");
 
+    if (controlData != nullptr && controlData->listColumnHeader != nullptr &&
+        controlData->formatListColumnCell != nullptr)
+    {
+        API_CMD_TEXT(680,
+                     posY + 30,
+                     font->handle,
+                     textStyle | OPT_CENTERY | OPT_CENTERX,
+                     controlData->listColumnHeader);
+    }
+
     showList();
 }
 
@@ -221,18 +231,32 @@ void cSongPlayer::showList()
         return;
     }
 
+    const bool hasListColumn = controlData != nullptr &&
+                               controlData->listColumnHeader != nullptr &&
+                               controlData->formatListColumnCell != nullptr;
+    const bool listColumnFocused =
+      hasListColumn && controlData != nullptr && controlData->isListColumnActive != 0;
     int16_t posY = this->posY + 62;
     int16_t width = 210;
     int16_t posX = (this->posX + this->width) - width;
     int16_t height = this->height - 30;
+    const int16_t columnX = posX + width - 22;
+    // Keep FX column outside the pattern-row selection frame.
+    constexpr int16_t kListColumnReserve = 40;
 
     int16_t x_pos = posX, y_pos, h_row = 27; // font->height+8;
-    uint16_t w_bar = width - 6;              // szerokosc ramki
+    uint16_t w_bar = width - 6;              // content / scissor width
+    uint16_t w_selection = w_bar;            // pattern-row selection frame width
     uint16_t lines;
 
     if (list->length > list->linesCount)
     {
         w_bar = width - 13;
+        w_selection = w_bar;
+    }
+    if (hasListColumn)
+    {
+        w_selection = (w_bar > kListColumnReserve) ? (w_bar - kListColumnReserve) : w_bar;
     }
 
     if (style & controlStyleHexNumbers)
@@ -250,7 +274,7 @@ void cSongPlayer::showList()
         listAnimationStep = 0;
         autoRefresh = false;
 
-        if (!disableBar)
+        if (!disableBar && !listColumnFocused)
         {
             x_pos = posX + 3;
             y_pos = posY + (barPos * h_row);
@@ -272,8 +296,8 @@ void cSongPlayer::showList()
             API_LINE_WIDTH(kRedFrameWidth);
             API_BEGIN(LINE_STRIP);
             API_VERTEX2F(x_pos, y_pos);
-            API_VERTEX2F(x_pos + w_bar, y_pos);
-            API_VERTEX2F(x_pos + w_bar, y_pos + h_row);
+            API_VERTEX2F(x_pos + w_selection, y_pos);
+            API_VERTEX2F(x_pos + w_selection, y_pos + h_row);
             API_VERTEX2F(x_pos, y_pos + h_row);
             API_VERTEX2F(x_pos, y_pos);
             API_END();
@@ -318,6 +342,10 @@ void cSongPlayer::showList()
             }
 
             drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
+            if (hasListColumn)
+            {
+                drawListColumnCell(i + textListPos, columnX, y_pos + (i * h_row));
+            }
         }
 
         API_RESTORE_CONTEXT();
@@ -417,12 +445,20 @@ void cSongPlayer::showList()
 
         autoRefresh = true;
 
-        if (!disableBar)
+        if (!disableBar && !listColumnFocused)
         {
             x_pos = posX + 3;
             y_pos = posY + (barPos * h_row) + (mode ? 0 : listAnimationStep);
             if (list->length > list->linesCount)
+            {
                 w_bar = width - 13;
+                w_selection = w_bar;
+                if (hasListColumn)
+                {
+                    w_selection =
+                      (w_bar > kListColumnReserve) ? (w_bar - kListColumnReserve) : w_bar;
+                }
+            }
 
             // ramka
             if (controlData->isListActive == 0)
@@ -441,8 +477,8 @@ void cSongPlayer::showList()
             API_LINE_WIDTH(kRedFrameWidth);
             API_BEGIN(LINE_STRIP);
             API_VERTEX2F(x_pos, y_pos);
-            API_VERTEX2F(x_pos + w_bar, y_pos);
-            API_VERTEX2F(x_pos + w_bar, y_pos + h_row);
+            API_VERTEX2F(x_pos + w_selection, y_pos);
+            API_VERTEX2F(x_pos + w_selection, y_pos + h_row);
             API_VERTEX2F(x_pos, y_pos + h_row);
             API_VERTEX2F(x_pos, y_pos);
             API_END();
@@ -491,6 +527,10 @@ void cSongPlayer::showList()
                     }
 
                     drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
+                    if (hasListColumn)
+                    {
+                        drawListColumnCell(i + textListPos, columnX, y_pos + (i * h_row));
+                    }
                 }
             }
             else if (dir == -1) // tekst porusza sie w dol (wartosci w gore)
@@ -527,6 +567,10 @@ void cSongPlayer::showList()
                     }
 
                     drawIcon(i + table_offset, i, x_pos, y_pos, h_row);
+                    if (hasListColumn)
+                    {
+                        drawListColumnCell(i + table_offset, columnX, y_pos + (i * h_row));
+                    }
                 }
             }
         }
@@ -559,6 +603,10 @@ void cSongPlayer::showList()
                 }
 
                 drawIcon(i + textListPos, i, x_pos, y_pos, h_row);
+                if (hasListColumn)
+                {
+                    drawListColumnCell(i + textListPos, columnX, y_pos + (i * h_row));
+                }
             }
         }
 
@@ -611,6 +659,22 @@ void cSongPlayer::drawIcon(int pos, int row, int x, int y, int h)
             API_END();
         }
     }
+}
+
+void cSongPlayer::drawListColumnCell(int slotIndex, int16_t x, int16_t y)
+{
+    if (controlData == nullptr || controlData->formatListColumnCell == nullptr || slotIndex < 0)
+    {
+        return;
+    }
+
+    char cell[8] = { 0 };
+    controlData->formatListColumnCell(
+      controlData->listColumnCtx, static_cast<uint8_t>(slotIndex), cell, sizeof(cell));
+
+    const bool empty = cell[0] == '\0' || (cell[0] == '-' && cell[1] == '\0');
+    API_COLOR(empty ? colors[1] : colors[0]);
+    API_CMD_TEXT(x, y, font->handle, textStyle | OPT_CENTERY | OPT_CENTERX, cell);
 }
 
 void cSongPlayer::drawTrackNames()

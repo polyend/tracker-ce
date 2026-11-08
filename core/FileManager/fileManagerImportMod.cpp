@@ -3,6 +3,7 @@
 
 #include "mtSequencer.h"
 
+#include "ScreenHost.h"
 #include "fileManager.h"
 #include "fileTransfer.h"
 #include "log.h"
@@ -418,6 +419,7 @@ void cFileManager::importModFile_Patterns()
     {
         mtProject.song.playlist[a] = modSong.playlist[a] + 1;
     }
+    notifySongPlaylistReplaced();
 
     // mod narzuca length 64
     for (uint8_t a = 0; a < 8; a++)

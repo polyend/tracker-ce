@@ -92,6 +92,46 @@ void PerformanceFxScenes::clearBank()
     externalRamPerfScenesBank.magic[3] = 'S';
     externalRamPerfScenesBank.version = kPerfScenesFileVersion;
     externalRamPerfScenesBank.count = kPerfScenesCount;
+    activeSlot = 0xFF;
+}
+
+void PerformanceFxScenes::setActiveSlot(uint8_t idx)
+{
+    activeSlot = (idx < kPerfScenesCount) ? idx : 0xFF;
+}
+
+void PerformanceFxScenes::refreshPage(PerformancePageHost& host)
+{
+    static const char* const sceneSlotLabels[kPerfScenesCount] = {
+        "1", "2", "3", "4", "5", "6", "7", "8"
+    };
+
+    if (activeSlot < kPerfScenesCount)
+    {
+        // TitleBar stores a pointer — keep this buffer stable.
+        static char titleBuf[24];
+        snprintf(titleBuf, sizeof(titleBuf), "Scenes - %u", static_cast<unsigned>(activeSlot + 1));
+        host.setPageTitle(titleBuf);
+    }
+    else
+    {
+        host.setPageTitle(title());
+    }
+
+    for (uint8_t i = 0; i < kPerfScenesCount; i++)
+    {
+        PerformanceLabelState state = PerformanceLabelState::Empty;
+        if (i == activeSlot)
+        {
+            state = PerformanceLabelState::Active;
+        }
+        else if (isFilled(i))
+        {
+            state = PerformanceLabelState::Filled;
+        }
+        host.setScreenLabel(i, sceneSlotLabels[i], state);
+    }
+    host.finishScreenLabels();
 }
 
 bool PerformanceFxScenes::validateHeader() const
@@ -104,19 +144,36 @@ bool PerformanceFxScenes::validateHeader() const
 
 bool PerformanceFxScenes::readFile(const char* path)
 {
-    if (!ModuleSidecar::read(
-          fileSystem, path, &externalRamPerfScenesBank, sizeof(externalRamPerfScenesBank)))
+    // v1 and v3 share the same blob size (scenes only).
+    strPerfScenesFile scenesOnly;
+    if (ModuleSidecar::read(fileSystem, path, &scenesOnly, sizeof(scenesOnly)))
     {
-        return false;
+        if (scenesOnly.magic[0] == 'P' && scenesOnly.magic[1] == 'F' && scenesOnly.magic[2] == 'X' &&
+            scenesOnly.magic[3] == 'S' && scenesOnly.count == kPerfScenesCount &&
+            (scenesOnly.version == kPerfScenesFileVersion ||
+             scenesOnly.version == kPerfScenesFileVersionV1))
+        {
+            clearBank();
+            memcpy(externalRamPerfScenesBank.scenes, scenesOnly.scenes, sizeof(scenesOnly.scenes));
+            return true;
+        }
     }
 
-    if (!validateHeader())
+    strPerfScenesFileV2 legacyV2;
+    if (ModuleSidecar::read(fileSystem, path, &legacyV2, sizeof(legacyV2)))
     {
-        clearBank();
-        return false;
+        if (legacyV2.magic[0] == 'P' && legacyV2.magic[1] == 'F' && legacyV2.magic[2] == 'X' &&
+            legacyV2.magic[3] == 'S' && legacyV2.version == kPerfScenesFileVersionV2 &&
+            legacyV2.count == kPerfScenesCount)
+        {
+            clearBank();
+            memcpy(externalRamPerfScenesBank.scenes, legacyV2.scenes, sizeof(legacyV2.scenes));
+            return true;
+        }
     }
 
-    return true;
+    clearBank();
+    return false;
 }
 
 void PerformanceFxScenes::writeFile(const char* path)
@@ -175,26 +232,18 @@ bool PerformanceFxScenes::recallScene(PerformancePageHost& host, uint8_t idx)
     }
 
     host.recallFxScene(externalRamPerfScenesBank.scenes[idx]);
+    setActiveSlot(idx);
     return true;
 }
 
 void PerformanceFxScenes::onShow(PerformancePageHost& host)
 {
-    static const char* const sceneSlotLabels[kPerfScenesCount] = {
-        "1", "2", "3", "4", "5", "6", "7", "8"
-    };
-
-    host.setPageTitle(title());
-    for (uint8_t i = 0; i < kPerfScenesCount; i++)
-    {
-        host.setScreenLabel(i, sceneSlotLabels[i], isFilled(i));
-    }
-    host.finishScreenLabels();
+    refreshPage(host);
 }
 
 void PerformanceFxScenes::onHide(PerformancePageHost& host)
 {
-    host.restoreTrackLabels();
+    (void)host;
 }
 
 void PerformanceFxScenes::onScreenButton(PerformancePageHost& host, uint8_t button, uint8_t state)
@@ -209,10 +258,11 @@ void PerformanceFxScenes::onScreenButton(PerformancePageHost& host, uint8_t butt
         char name[kPerfFxSceneNameLength];
         snprintf(name, sizeof(name), "Scene %d", button + 1);
         storeScene(host, button, name);
-        onShow(host);
+        refreshPage(host);
     }
     else if (recallScene(host, button))
     {
         host.refreshFxRack();
+        refreshPage(host);
     }
 }

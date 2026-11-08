@@ -123,8 +123,13 @@ const uint8_t SYNTH_INSTRUMENTS_START_IDX = MIDI_INSTRUMENTS_START_IDX + kMidiIn
 const uint8_t PATTERN_INDEX_MIN = 1;
 const uint8_t PATTERN_INDEX_MAX = 255;
 
-const uint8_t FX_MAX = 49;
-const uint8_t FX_COUNT = 46;
+// Builtin pattern Step FX picker entries (seed tables). Module FX append at runtime.
+const uint8_t FX_BUILTIN_COUNT = 46;
+const uint8_t FX_COUNT_MAX = 62; // FX_BUILTIN_COUNT + kMaxModulePatternStepFx (16)
+// Legacy alias: seed / compile-time table size. Prefer interfaceGlobals.getFxCount() for UI.
+const uint8_t FX_COUNT = FX_BUILTIN_COUNT;
+// Highest valid stored FX type id (module range ends at 143).
+const uint8_t FX_MAX = 143;
 const uint8_t FX_COUNT_HIDDEN_FXes = 1; // ile fxów na końcu listy jest ukrytych
 
 const uint8_t FX_VALUE_MAX = 127;

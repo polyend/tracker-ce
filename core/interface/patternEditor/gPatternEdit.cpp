@@ -552,7 +552,7 @@ void cPatternEditor::showFillFx()
     // fx
     fillFxTypeList.linesCount = 13;
     fillFxTypeList.start = fillData[editParam].param + 1;
-    fillFxTypeList.length = FX_COUNT + 1 - FX_COUNT_HIDDEN_FXes;
+    fillFxTypeList.length = interfaceGlobals.getFxCount() + 1 - FX_COUNT_HIDDEN_FXes;
     fillFxTypeList.data = (char**)(&interfaceGlobals.ptrAllFxNamesShort);
     fillFxTypeList.lineWidthMax = 800 / 8 - 30;
     fillFxTypeList.lineTextLenMax = 15;
@@ -1720,10 +1720,10 @@ void cPatternEditor::showActualParamOnBar(bool forceShow)
                                    .step[trackerPattern.actualStep]
                                    .fx[1 - (editParam - 2)];
             uint8_t type_temp = interfaceGlobals.fxIdToName(stepFx.type);
-            if (type_temp == 0 || type_temp >= FX_MAX)
+            if (type_temp == 0 || type_temp >= interfaceGlobals.getFxCount())
             {
                 uint8_t lastUsedFx = getPreviousUsedFx();
-                if (lastUsedFx < FX_MAX)
+                if (lastUsedFx < interfaceGlobals.getFxCount())
                 {
                     type_temp = lastUsedFx;
                 }

@@ -4,6 +4,7 @@
 #ifdef FEATURE_SYNTH
 #include "Synth.h"
 #endif
+#include "FeatureModuleRegistry.h"
 #include "fileManager.h"
 #include "mtAudioEngine.h"
 #include "mtSequencer.h"
@@ -716,7 +717,14 @@ AUDIO_CORE_FLASH void Sequencer::play_microStep(int row)
                     }
                     break;
 
-                default: break;
+                default:
+                    if (featureModules.findPatternStepFx(_fx.type) != nullptr)
+                    {
+                        killFxOnSlot(row, fxIndex);
+                        atLeastOneFx = 1;
+                        featureModules.dispatchPatternStepFx(_fx.type, _fx.value);
+                    }
+                    break;
             }
 
             if (stepToSend.note == STEP_NOTE_EMPTY && !atLeastOneFx)

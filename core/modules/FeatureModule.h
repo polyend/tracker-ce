@@ -1,7 +1,9 @@
 #ifndef MODULES_FEATUREMODULE_H_
 #define MODULES_FEATUREMODULE_H_
 
+#include "PatternStepFx.h"
 #include "PerformanceHost.h"
+#include "ScreenHost.h"
 
 #include <stdint.h>
 
@@ -49,6 +51,25 @@ class FeatureModule
 
     // Optional Performance Mode page. Return nullptr if the module has none.
     virtual PerformancePage* performancePage() { return nullptr; }
+
+    // Optional extension for an existing ModuleBase screen. Return nullptr if none.
+    virtual ScreenExtension* screenExtension() { return nullptr; }
+
+    // Optional pattern Step FX exports (see PatternStepFx.h).
+    virtual uint8_t patternStepFxCount() const { return 0; }
+    virtual const PatternStepFxInfo* patternStepFx(uint8_t index) const
+    {
+        (void)index;
+        return nullptr;
+    }
+
+    // Main thread only. Return true if this module handled typeId.
+    virtual bool onPatternStepFx(uint8_t typeId, uint8_t value)
+    {
+        (void)typeId;
+        (void)value;
+        return false;
+    }
 };
 
 #endif /* MODULES_FEATUREMODULE_H_ */

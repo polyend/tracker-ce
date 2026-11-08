@@ -34,6 +34,13 @@ class ModuleBase
     virtual void destroyDisplayControls() = 0;
 
     virtual uint8_t getCurrentModeIdx() { return 0; }
+    // Mini menu mode dots when ModuleRef.modes is null. 0 = no dynamic modes.
+    virtual uint8_t menuModeCount() { return 0; }
+    virtual uint32_t menuModeOption(uint8_t index)
+    {
+        (void)index;
+        return 0;
+    }
     virtual void hideControlsUnderMiniMenu() {}
     virtual bool wasLastSwitchingSuccessfull() { return true; }
 

@@ -11,6 +11,7 @@
 #include "fileManager.h"
 #include "fileTransfer.h"
 #include "FeatureModuleRegistry.h"
+#include "core/interfaceDefs.h"
 
 #include "projectEditor/projectEditor.h"
 
@@ -54,6 +55,7 @@ void cFileManager::init(FileSystem* fileSystem, Synth* synth, bool stereoSampleM
     patternsMetadata.init(fileSystem);
     registerFeatureModules(featureModules);
     featureModules.initAll(fileSystem);
+    interfaceGlobals.rebuildPatternFxCatalog();
     FileManagerOperation::init(fileSystem);
 
     this->stereoSampleMode = stereoSampleMode;

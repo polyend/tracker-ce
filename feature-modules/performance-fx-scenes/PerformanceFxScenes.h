@@ -9,7 +9,9 @@
 class FileSystem;
 
 static constexpr uint8_t kPerfScenesCount = 8;
-static constexpr uint16_t kPerfScenesFileVersion = 1;
+static constexpr uint16_t kPerfScenesFileVersion = 3;
+static constexpr uint16_t kPerfScenesFileVersionV2 = 2;
+static constexpr uint16_t kPerfScenesFileVersionV1 = 1;
 
 struct strPerfScenesFile
 {
@@ -22,8 +24,20 @@ struct strPerfScenesFile
 static_assert(sizeof(strPerfScenesFile) % 4 == 0,
               "strPerfScenesFile must be 4-byte aligned for FatFs DMA");
 
-// Example external feature module: Performance FX Scenes.
-// Lives outside core/ and only depends on the Feature Module SDK headers.
+// Legacy v2: scenes + song-slot bindings (song bindings ignored on load).
+struct strPerfScenesFileV2
+{
+    char magic[4];
+    uint16_t version;
+    uint16_t count;
+    strPerfScene scenes[kPerfScenesCount];
+    uint8_t songSlotScene[255 + 1];
+};
+
+static_assert(sizeof(strPerfScenesFileV2) % 4 == 0,
+              "strPerfScenesFileV2 must be 4-byte aligned for FatFs DMA");
+
+// Performance Mode page: store/recall 12-slot FX rack snapshots.
 class PerformanceFxScenes : public FeatureModule, public PerformancePage
 {
   public:
@@ -51,8 +65,11 @@ class PerformanceFxScenes : public FeatureModule, public PerformancePage
     void saveToWorkspace();
     void storeScene(PerformancePageHost& host, uint8_t idx, const char* name);
     bool recallScene(PerformancePageHost& host, uint8_t idx);
+    void setActiveSlot(uint8_t idx);
+    void refreshPage(PerformancePageHost& host);
 
     FileSystem* fileSystem = nullptr;
+    uint8_t activeSlot = 0xFF; // 0..7, or 0xFF if none
 };
 
 extern PerformanceFxScenes performanceFxScenes;
