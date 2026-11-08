@@ -9,7 +9,7 @@
 #include <algorithm>
 
 static constexpr size_t kSdFilePoolSize = FF_FS_LOCK;
-__NOINIT(EXTERNAL_RAM) static SdFile s_sdFilePool[kSdFilePoolSize];
+static SdFile s_sdFilePool[kSdFilePoolSize];
 static bool s_sdFilePoolUsed[kSdFilePoolSize]{ false };
 
 static SdFile* allocateSdFile()
@@ -110,6 +110,13 @@ bool FileSystemImpl::isSdCardInserted()
 void FileSystemImpl::setMountEventCallback(CardStateChangeCallback funct)
 {
     cardStateChangeCallback = funct;
+}
+
+bool FileSystemImpl::remount()
+{
+    // Nothing else writes to the card here: this platform has no USB storage
+    // mode.
+    return false;
 }
 
 bool FileSystemImpl::exists(const char* path)
@@ -334,7 +341,7 @@ void FileSystemImpl::endFile(FileHandle fileHandle)
     file->end();
 }
 
-size_t FileSystemImpl::readFile(void* destBuf, size_t destLen, FileHandle fileHandle)
+int32_t FileSystemImpl::readFile(void* destBuf, size_t destLen, FileHandle fileHandle)
 {
     assert(fileHandle != nullptr);
     SdFile* file = (SdFile*)fileHandle;
@@ -344,7 +351,7 @@ size_t FileSystemImpl::readFile(void* destBuf, size_t destLen, FileHandle fileHa
     return file->read(destBuf, destLen);
 }
 
-size_t FileSystemImpl::writeFile(const void* data, size_t dataLen, FileHandle fileHandle)
+int32_t FileSystemImpl::writeFile(const void* data, size_t dataLen, FileHandle fileHandle)
 {
     assert(fileHandle != nullptr);
     SdFile* file = (SdFile*)fileHandle;

@@ -1,5 +1,6 @@
 #include "VoiceStreamManager.h"
 #include "cr_section_macros.h"
+#include "log.h"
 #include <string.h>
 
 extern strMtProject mtProject;
@@ -298,8 +299,13 @@ bool VoiceStreamManager::setupInstrumentStream(int instrIdx,
             return false;
         }
         size_t toRead = preCacheFrames * sizeof(int16_t);
-        size_t rd = fs->readFile(dst, toRead, fh);
-        if (rd < toRead)
+        int32_t rd = fs->readFile(dst, toRead, fh);
+        if (rd < 0)
+        {
+            fs->closeFile(fh);
+            return false;
+        }
+        if (static_cast<size_t>(rd) < toRead)
         {
             memset(reinterpret_cast<uint8_t*>(dst) + rd, 0, toRead - rd);
         }
@@ -378,8 +384,13 @@ bool VoiceStreamManager::setupInstrumentStream(int instrIdx,
                 }
                 if (fs->seekFile(chOffset + start * sizeof(int16_t), fh))
                 {
-                    size_t rd = fs->readFile(windowBuf, count * sizeof(int16_t), fh);
-                    uint32_t samplesRead = (uint32_t)(rd / sizeof(int16_t));
+                    int32_t rd = fs->readFile(windowBuf, count * sizeof(int16_t), fh);
+                    if (rd < 0)
+                    {
+                        fs->closeFile(fh);
+                        return false;
+                    }
+                    uint32_t samplesRead = static_cast<uint32_t>(rd) / sizeof(int16_t);
                     if (samplesRead > 0)
                     {
                         firstSample = windowBuf[0];
@@ -445,7 +456,37 @@ bool VoiceStreamManager::rebindInstrumentStreamFile(int instrIdx,
     s_instrumentStreamPaths[instrIdx][PATCH_SIZE - 1] = '\0';
     mem.fileDataOffset = dataOffset;
 
-    auto [isOpen, fh] = fs->openFile(filePath, FileSystem::kRead);
+    return rebuildInstrumentClmt(instrIdx);
+}
+
+void VoiceStreamManager::rebindAllInstrumentStreamFiles()
+{
+    if (fs == nullptr)
+    {
+        return;
+    }
+
+    for (int instrIdx = 0; instrIdx < kMaxInstruments; ++instrIdx)
+    {
+        if (!mtProject.sampleMemory[instrIdx].isStreamed ||
+            s_instrumentStreamPaths[instrIdx][0] == '\0')
+        {
+            continue;
+        }
+
+        [[maybe_unused]] bool rebound = rebuildInstrumentClmt(instrIdx);
+        LOGF("stream rebind %d %s: %s",
+             instrIdx,
+             rebound ? "ok" : "failed",
+             s_instrumentStreamPaths[instrIdx]);
+    }
+}
+
+bool VoiceStreamManager::rebuildInstrumentClmt(int instrIdx)
+{
+    auto& mem = mtProject.sampleMemory[instrIdx];
+
+    auto [isOpen, fh] = fs->openFile(s_instrumentStreamPaths[instrIdx], FileSystem::kRead);
     if (!isOpen || fh == nullptr)
     {
         mem.hasValidClmt = false;
@@ -518,8 +559,20 @@ void VoiceStreamManager::refreshInstrumentSliceCache(int instrIdx)
                               (ch == 1 ? (totalFrames * sizeof(int16_t)) : 0);
                             if (fs->seekFile(chOffset + kLinearHalf * sizeof(int16_t), fh))
                             {
-                                fs->readFile(
-                                  dst + kLinearHalf, restoreCount * sizeof(int16_t), fh);
+                                size_t toRead = restoreCount * sizeof(int16_t);
+                                int32_t rd =
+                                  fs->readFile(dst + kLinearHalf, toRead, fh);
+                                if (rd < 0)
+                                {
+                                    fs->closeFile(fh);
+                                    return;
+                                }
+                                if (static_cast<size_t>(rd) < toRead)
+                                {
+                                    memset(reinterpret_cast<uint8_t*>(dst + kLinearHalf) + rd,
+                                           0,
+                                           toRead - rd);
+                                }
                             }
                         }
                     }
@@ -605,8 +658,13 @@ void VoiceStreamManager::refreshInstrumentSliceCache(int instrIdx)
                     if (fs->seekFile(chOffset + rawStart * sizeof(int16_t), fh))
                     {
                         size_t toRead = count * sizeof(int16_t);
-                        size_t rd = fs->readFile(dst + bufOff, toRead, fh);
-                        if (rd < toRead)
+                        int32_t rd = fs->readFile(dst + bufOff, toRead, fh);
+                        if (rd < 0)
+                        {
+                            fs->closeFile(fh);
+                            return;
+                        }
+                        if (static_cast<size_t>(rd) < toRead)
                         {
                             memset(reinterpret_cast<uint8_t*>(dst + bufOff) + rd,
                                    0,
@@ -720,8 +778,13 @@ void VoiceStreamManager::refreshInstrumentSingleSliceCache(int instrIdx, uint8_t
             if (fs->seekFile(chOffset + rawStart * sizeof(int16_t), fh))
             {
                 size_t toRead = count * sizeof(int16_t);
-                size_t rd = fs->readFile(dst + bufOff, toRead, fh);
-                if (rd < toRead)
+                int32_t rd = fs->readFile(dst + bufOff, toRead, fh);
+                if (rd < 0)
+                {
+                    fs->closeFile(fh);
+                    return;
+                }
+                if (static_cast<size_t>(rd) < toRead)
                 {
                     memset(reinterpret_cast<uint8_t*>(dst + bufOff) + rd, 0, toRead - rd);
                 }
@@ -1119,8 +1182,8 @@ bool VoiceStreamManager::readInstrumentFramesBlocking(int instrIdx,
     bool ok = fs->seekFile(byteOffset, fh);
     if (ok)
     {
-        size_t rd = fs->readFile(dest, bytesToRead, fh);
-        ok = (rd == bytesToRead);
+        int32_t rd = fs->readFile(dest, bytesToRead, fh);
+        ok = (rd == static_cast<int32_t>(bytesToRead));
     }
     fs->closeFile(fh);
     return ok;
@@ -1646,9 +1709,22 @@ bool VoiceStreamManager::scheduleNextVoiceJob(bool synchronous)
     return true;
 }
 
+void VoiceStreamManager::setSuspended(bool suspended)
+{
+    isSuspended = suspended;
+
+    if (isSuspended && fs != nullptr)
+    {
+        // A read already on its way would otherwise complete during the next
+        // owner's first request. Its voice asks again after the suspension.
+        fs->waitAsyncRead();
+        currentJob.inProgress = false;
+    }
+}
+
 void VoiceStreamManager::update()
 {
-    if (fs == nullptr)
+    if (fs == nullptr || isSuspended)
     {
         return;
     }

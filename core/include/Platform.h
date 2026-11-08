@@ -348,6 +348,9 @@ class FileSystem
 
     virtual bool isSdCardInserted() = 0;
     virtual void setMountEventCallback(CardStateChangeCallback funct) = 0;
+    // Reads the volume from the card again, for after something else wrote to
+    // it. Every open file becomes invalid. False if no volume got mounted.
+    virtual bool remount() = 0;
 
     virtual bool exists(const char* path) = 0;
     virtual bool rename(const char* oldPath, const char* newPath) = 0;
@@ -367,8 +370,8 @@ class FileSystem
       FileOpenMode openMode = kRead,
       // non-null file handle means that fileHandle is already created
       FileHandle* fileHandle = nullptr) = 0;
-    virtual size_t readFile(void* destBuf, size_t bufLen, FileHandle file) = 0;
-    virtual size_t writeFile(const void* data, size_t dataSize, FileHandle fileHandle) = 0;
+    virtual int32_t readFile(void* destBuf, size_t bufLen, FileHandle file) = 0;
+    virtual int32_t writeFile(const void* data, size_t dataSize, FileHandle fileHandle) = 0;
     virtual bool seekFileCur(int offset, FileHandle fileHandle) = 0;
     virtual bool seekFile(uint32_t pos, FileHandle fileHandle) = 0;
     virtual void closeFile(FileHandle file, bool deleteOnClose = true) = 0;
@@ -423,8 +426,8 @@ class Usb
     enum class ClassType
     {
         kMidi,
-        kAudioIn,
-        kAudioOut,
+        kAudioIn,  // Audio input into Tracker (USB OUT: Host -> Device, 2ch)
+        kAudioOut, // Audio output from Tracker (USB IN: Device -> Host, 28ch)
         kStorage,
         kSerial
     };

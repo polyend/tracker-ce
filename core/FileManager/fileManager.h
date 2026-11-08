@@ -224,14 +224,25 @@ class cFileManager
     bool openRecentProject(int indexOnRecentList);
 
     bool saveProjectToWorkspace(bool forceSaveAll = false);
+
+    // Runs pending workspace saves to completion instead of leaving them to
+    // autosave. Refuses while another operation is using the card.
+    bool flushWorkspaceSave();
+
+    // For while something else, like a USB host, owns the card. Changes made
+    // in the meantime are saved once the suspension ends.
+    void setWorkspaceSaveSuspended(bool suspended);
+
     bool saveProject(char* projectPathToSave = nullptr, char* projectNameToSave = nullptr);
 
-    bool importSamplesToProject(uint8_t fileFrom,
-                                uint8_t fileTo,
-                                uint8_t instrumentSlot,
-                                uint16_t dataFrom,
-                                uint16_t dataTo,
-                                bool isLofi);
+    bool importSamplesToProject(
+      uint8_t fileFrom,
+      uint8_t fileTo,
+      uint8_t instrumentSlot,
+      uint16_t dataFrom,
+      uint16_t dataTo,
+      bool isLofi,
+      FileManagerOperation::SampleLoadMode loadMode = FileManagerOperation::SampleLoadMode::kRam);
     bool importSampleToProject(char* filePath, char* fileName, uint8_t instrumentSlot);
     bool copyInstrumentsInWorkspace(uint8_t copyInstrSrc,
                                     uint8_t copyInstrCount,
@@ -366,6 +377,7 @@ class cFileManager
 
     bool loadInstrumentFormFileStruct(strInstrument* instrument,
                                       strInstrumentFile* instrumentFile,
+                                      uint32_t instrumentFileSize,
                                       uint32_t& instrumentFileDataOffsetOut);
 
     void completeLoadedInstrumentStruct(int idx, bool success, uint32_t samplesCount = 0);
@@ -395,7 +407,10 @@ class cFileManager
     bool isInstrumentStereo(int idx);
     void setInstrumentSampleAddress(int idx, uint16_t channelCount, uint32_t samplesCount);
     bool promoteStreamedInstrumentToRam(int idx);
-    bool demoteRamInstrumentToStream(int idx, const char* backingPtiPath, uint32_t dataOffset);
+    bool demoteRamInstrumentToStream(int idx,
+                                     const char* backingPtiPath,
+                                     uint32_t dataOffset,
+                                     bool forceStream = false);
 
     bool isWorkspaceInstrumentPtiFileValid(int idx);
     bool resolveProjectInstrumentPtiPath(int idx, char* outPath, size_t maxLen);
@@ -446,6 +461,7 @@ class cFileManager
     PatternsMetadata patternsMetadata;
 
     bool stereoSampleMode = false;
+    bool workspaceSaveSuspended = false;
 
     // na cele zewnetrzne (popupy itp)
     uint8_t status;
@@ -521,6 +537,9 @@ class cFileManager
 
     void loadPatternFromWorkspaceFinish();
 
+    bool validatePatternFileData(const char* filePath,
+                                 const Sequencer::strPattern* pattern,
+                                 size_t fileSize);
     bool writePatternFile(const char* filePath, Sequencer::strPattern* sourcePattern);
     bool readPatternFile(const char* filePath, Sequencer::strPattern* destPattern);
     bool saveActualPattern(const char* path, uint8_t index);

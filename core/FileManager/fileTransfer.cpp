@@ -4,6 +4,7 @@
 #include "mtSequencer.h"
 
 #include "fileTransfer.h"
+#include "instrumentFileValidation.h"
 #include <string.h>
 
 extern uint8_t externalRamFileManagerSrcBuff[READ_WRITE_BUFOR_SIZE];
@@ -110,22 +111,17 @@ uint8_t cFileTransfer::loadFileToMemory(const char* file,
 {
     if (transferStep == 0)
     {
-        if (!fileSystem->exists(file))
-            return fileTransferFileNoExist;
-
         auto [isOpen, fileHandle] =
           fileSystem->openFile(file, FileSystem::FileOpenMode::kRead, &transferFile);
-        if (isOpen)
-        {
-            sourceMemTotal = memSize;
-            memStep = (mode == fileWholeOnce)      ? sourceMemTotal
-                      : (mode == fileDivIntoParts) ? memoryReadPerPart
-                                                   : READ_WRITE_BUFOR_SIZE;
-            sourceMemComplited = 0;
-            transferStep = 1;
+        if (!isOpen)
+            return fileTransferFileNoExist;
 
-            memset(memory, 0, memSize);
-        }
+        sourceMemTotal = memSize;
+        memStep = (mode == fileWholeOnce)      ? sourceMemTotal
+                  : (mode == fileDivIntoParts) ? memoryReadPerPart
+                                               : READ_WRITE_BUFOR_SIZE;
+        sourceMemComplited = 0;
+        transferStep = 1;
     }
 
     if (transferStep == 1)
@@ -145,7 +141,7 @@ uint8_t cFileTransfer::loadFileToMemory(const char* file,
 
     if (transferStep == 2)
     {
-        uint32_t result = fileSystem->readFile(memory + sourceMemComplited, memStep, transferFile);
+        int32_t result = fileSystem->readFile(memory + sourceMemComplited, memStep, transferFile);
 
         if (result >= 0)
         {
@@ -170,6 +166,10 @@ uint8_t cFileTransfer::loadFileToMemory(const char* file,
 
     if (transferStep == 3)
     {
+        if (sourceMemComplited < memSize)
+        {
+            memset(memory + sourceMemComplited, 0, memSize - sourceMemComplited);
+        }
         transferStep = 0;
         fileSystem->closeFile(transferFile, false);
         return fileTransferEnd;
@@ -201,9 +201,7 @@ uint8_t cFileTransfer::loadSampleToMemory(const char* file,
             sourceMemComplited = 0;
             convertedDataSize = 0;
 
-            readHeader(&sampleHead, transferFile);
-
-            if (!checkSampleValid(sampleHead))
+            if (!readHeader(&sampleHead, transferFile) || !checkSampleValid(sampleHead))
             {
                 fileSystem->closeFile(transferFile, false);
                 transferStep = 0;
@@ -235,7 +233,7 @@ uint8_t cFileTransfer::loadSampleToMemory(const char* file,
 
     if (transferStep == 1)
     {
-        uint32_t result = fileSystem->readFile(externalRamFileManagerBuffL, memStep, transferFile);
+        int32_t result = fileSystem->readFile(externalRamFileManagerBuffL, memStep, transferFile);
 
         if (result >= 0)
         {
@@ -307,59 +305,81 @@ bool cFileTransfer::copyFile(FileSystem* fileSystem,
     }
 
     bool result = false;
-    uint32_t memCopyStep;
-    uint32_t sourceMemComplited;
-    uint32_t sourceMemTotal;
+    bool destinationOpened = false;
+    FileSystem::FileHandle sourceHandle = nullptr;
+    FileSystem::FileHandle destinationHandle = nullptr;
 
-    auto [isSrcOpen, srcFileHandle] =
+    auto [isSourceOpen, openedSourceHandle] =
       fileSystem->openFile(srcFilepath, FileSystem::FileOpenMode::kRead, &transferFile);
+    sourceHandle = openedSourceHandle;
 
-    if (isSrcOpen)
+    if (isSourceOpen)
     {
-        auto [isDestOpen, destFileHandle] = fileSystem->openFile(
-          dstFilepath, FileSystem::FileOpenMode::kWriteCreateNew, &transferFile2);
+        auto [isDestinationOpen, openedDestinationHandle] =
+          fileSystem->openFile(dstFilepath, FileSystem::FileOpenMode::kWriteCreateNew, &transferFile2);
+        destinationHandle = openedDestinationHandle;
+        destinationOpened = isDestinationOpen;
 
-        if (isDestOpen)
+        if (isDestinationOpen)
         {
-            sourceMemTotal = fileSystem->getFileSize(transferFile);
-            memCopyStep = READ_WRITE_BUFOR_SIZE;
-            sourceMemComplited = 0;
+            const size_t sourceSize = fileSystem->getFileSize(sourceHandle);
+            size_t bytesCopied = 0;
+            result = true;
 
-            while (sourceMemComplited < sourceMemTotal)
+            while (bytesCopied < sourceSize)
             {
-                int32_t read_result =
-                  fileSystem->readFile(externalRamFileManagerBuffL, memCopyStep, transferFile);
+                const size_t bytesRemaining = sourceSize - bytesCopied;
+                const size_t bytesToRead =
+                  bytesRemaining < READ_WRITE_BUFOR_SIZE ? bytesRemaining : READ_WRITE_BUFOR_SIZE;
+                const int32_t readResult =
+                  fileSystem->readFile(externalRamFileManagerBuffL, bytesToRead, sourceHandle);
 
-                if (read_result > 0)
+                if (readResult <= 0 || static_cast<size_t>(readResult) > bytesToRead)
                 {
-                    int32_t write_result = fileSystem->writeFile(
-                      externalRamFileManagerBuffL, read_result, transferFile2);
+                    result = false;
+                    break;
+                }
 
-                    if (write_result >= 0)
-                    {
-                        sourceMemComplited += write_result;
+                const size_t bytesRead = static_cast<size_t>(readResult);
+                size_t bytesWritten = 0;
+                while (bytesWritten < bytesRead)
+                {
+                    const size_t bytesToWrite = bytesRead - bytesWritten;
+                    const int32_t writeResult = fileSystem->writeFile(
+                      externalRamFileManagerBuffL + bytesWritten, bytesToWrite, destinationHandle);
 
-                        if (sourceMemComplited >= sourceMemTotal) // eof
-                        {
-                            result = true;
-                            break;
-                        }
-                        else if (read_result == write_result)
-                        {
-                            continue;
-                        }
-                    }
-                    else
+                    if (writeResult <= 0 || static_cast<size_t>(writeResult) > bytesToWrite)
                     {
+                        result = false;
                         break;
                     }
+
+                    bytesWritten += static_cast<size_t>(writeResult);
                 }
+
+                if (!result)
+                {
+                    break;
+                }
+
+                bytesCopied += bytesRead;
             }
         }
     }
 
-    fileSystem->closeFile(transferFile, false);
-    fileSystem->closeFile(transferFile2, false);
+    if (sourceHandle != nullptr)
+    {
+        fileSystem->closeFile(sourceHandle, false);
+    }
+    if (destinationHandle != nullptr)
+    {
+        fileSystem->closeFile(destinationHandle, false);
+    }
+    if (destinationOpened && !result)
+    {
+        fileSystem->remove(dstFilepath);
+    }
+
     return result;
 }
 
@@ -427,23 +447,35 @@ uint8_t cFileTransfer::copyFile(const char* src, const char* dest)
     if (transferStep == 2)
     {
         uint32_t fileNameLen = strlen(src);
+        bool invalidInstrument = false;
 
-        if (((src[fileNameLen - 1] == 'i') || (src[fileNameLen - 1] == 'I')) &&
+        if (fileNameLen >= 4 &&
+            ((src[fileNameLen - 1] == 'i') || (src[fileNameLen - 1] == 'I')) &&
             ((src[fileNameLen - 2] == 't') || (src[fileNameLen - 2] == 'T')) &&
             ((src[fileNameLen - 3] == 'p') || (src[fileNameLen - 3] == 'P')) &&
             (src[fileNameLen - 4] == '.'))
         {
             fileSystem->seekFile(0, transferFile);
-            strProjectFileHeader instrHeader;
-            memset(&instrHeader, 0, sizeof(instrHeader));
+            strInstrumentFile instrumentFile;
+            memset(&instrumentFile, 0, sizeof(instrumentFile));
 
-            fileSystem->readFile(&instrHeader, sizeof(instrHeader), transferFile);
+            int32_t bytesRead =
+              fileSystem->readFile(&instrumentFile, sizeof(instrumentFile), transferFile);
+            InstrumentFileValidation::Result validation;
 
-            if (instrHeader.id_file[0] == 'T' && instrHeader.id_file[1] == 'I' &&
-                instrHeader.size > 0)
+            if (bytesRead >= 0 &&
+                InstrumentFileValidation::validate((const uint8_t*)&instrumentFile,
+                                                   bytesRead,
+                                                   sourceMemComplited,
+                                                   sizeof(strInstrument),
+                                                   INSTRUMENT_FILE_VERSION,
+                                                   validation))
             {
-                convertedDataSize = sourceMemComplited - instrHeader.size +
-                                    (sizeof(strInstrumentFile) - sizeof(strInstrument));
+                convertedDataSize = sourceMemComplited - validation.dataOffset;
+            }
+            else
+            {
+                invalidInstrument = true;
             }
         }
 
@@ -451,6 +483,11 @@ uint8_t cFileTransfer::copyFile(const char* src, const char* dest)
 
         fileSystem->closeFile(transferFile, false);
         fileSystem->closeFile(transferFile2, false);
+        if (invalidInstrument)
+        {
+            fileSystem->remove(dest);
+            return fileTransferFileNoValid;
+        }
         return fileTransferEnd;
     }
 
@@ -480,28 +517,25 @@ uint8_t cFileTransfer::copyInstrumentHeader(const char* src, const char* dest)
 
     int32_t readResult =
       fileSystem->readFile(externalRamFileManagerBuffL, sizeof(strInstrumentFile), transferFile);
+    uint32_t sourceFileSize = fileSystem->getFileSize(transferFile);
     fileSystem->closeFile(transferFile, false);
 
-    if (readResult <= 0)
+    if (readResult < 0)
     {
         return fileTransferError;
     }
 
-    uint32_t headerSize = readResult;
-    if (readResult >= (int32_t)sizeof(strProjectFileHeader))
+    InstrumentFileValidation::Result validation;
+    if (!InstrumentFileValidation::validate(externalRamFileManagerBuffL,
+                                            readResult,
+                                            sourceFileSize,
+                                            sizeof(strInstrument),
+                                            INSTRUMENT_FILE_VERSION,
+                                            validation))
     {
-        strProjectFileHeader* instrHeader = (strProjectFileHeader*)externalRamFileManagerBuffL;
-        if (instrHeader->id_file[0] == 'T' && instrHeader->id_file[1] == 'I' &&
-            instrHeader->size > 0)
-        {
-            uint32_t calcHeaderSize =
-              instrHeader->size + (sizeof(strInstrumentFile) - sizeof(strInstrument));
-            if (calcHeaderSize <= (uint32_t)readResult)
-            {
-                headerSize = calcHeaderSize;
-            }
-        }
+        return fileTransferFileNoValid;
     }
+    uint32_t headerSize = validation.dataOffset;
 
     auto [isDestOpen, destFileHandle] =
       fileSystem->openFile(dest, FileSystem::FileOpenMode::kWriteCreateNew, &transferFile2);
@@ -543,20 +577,19 @@ uint8_t cFileTransfer::copySample(const char* src,
 
         if (isOpen)
         {
-            readHeader(&sampleHead, transferFile);
+            if (!readHeader(&sampleHead, transferFile) || !checkSampleValid(sampleHead))
+            {
+                fileSystem->closeFile(transferFile, false);
+                transferStep = 0;
+                return fileTransferFileNoValid;
+            }
+
             if (sampleRate != defaultSampleRate)
             {
                 // trigger resampling in convertAudioData to target sampleRate
                 // by faking source rate in inverse proportions
                 sampleHead.sampleRate = (uint64_t)sampleHead.sampleRate * 44100 / sampleRate;
                 sampleHead.byteRate = (uint64_t)sampleHead.byteRate * 44100 / sampleRate;
-            }
-
-            if (!checkSampleValid(sampleHead))
-            {
-                fileSystem->closeFile(transferFile, false);
-                transferStep = 0;
-                return fileTransferFileNoValid;
             }
 
             auto [isDestOpen, fileDestHandle] =
@@ -1052,20 +1085,19 @@ uint8_t cFileTransfer::copySampleToInstrumentFile(const char* src,
           fileSystem->openFile(src, FileSystem::FileOpenMode::kRead, &transferFile);
         if (isOpen)
         {
-            readHeader(&sampleHead, transferFile);
+            if (!readHeader(&sampleHead, transferFile) || !checkSampleValid(sampleHead))
+            {
+                fileSystem->closeFile(transferFile, false);
+                transferStep = 0;
+                return fileTransferFileNoValid;
+            }
+
             if (sampleRate != defaultSampleRate)
             {
                 // trigger resampling in convertAudioData to target sampleRate
                 // by faking source rate in inverse proportions
                 sampleHead.sampleRate = (uint64_t)sampleHead.sampleRate * 44100 / sampleRate;
                 sampleHead.byteRate = (uint64_t)sampleHead.byteRate * 44100 / sampleRate;
-            }
-
-            if (!checkSampleValid(sampleHead))
-            {
-                fileSystem->closeFile(transferFile, false);
-                transferStep = 0;
-                return fileTransferFileNoValid;
             }
 
             auto [isDestOpen, fileDestHandle] =
@@ -1143,7 +1175,7 @@ uint8_t cFileTransfer::copySampleToInstrumentFile(const char* src,
             memStep = sourceMemTotal - sourceMemComplited;
         }
 
-        uint32_t bytesReadFromSource =
+        int32_t bytesReadFromSource =
           fileSystem->readFile(externalRamFileManagerSrcBuff, memStep, transferFile);
 
         if (bytesReadFromSource == 0) // koniec pliku - koncz kopiowanie
@@ -1481,5 +1513,609 @@ uint8_t cFileTransfer::loadSampleDataToMemory(
 
     transferStep = 0;
     fileSystem->closeFile(transferFile, false);
+    return fileTransferError;
+}
+
+extern int16_t externalRamSampleMemory[SAMPLE_MEMORY_SIZE / 2];
+
+static constexpr uint32_t kAlignedWriteChunkSize = 256 * 1024;
+
+static void findFreeSampleRamScratchStereo(uint32_t channels,
+                                           uint8_t*& outBaseL,
+                                           uint8_t*& outBaseR,
+                                           uint32_t& outCapPerChannel)
+{
+    uint8_t* scratchStart = reinterpret_cast<uint8_t*>(externalRamSampleMemory);
+    for (int i = 0; i < kSampleInstrumentsCount; i++)
+    {
+        if (mtProject.instrument[i].isActive && mtProject.instrument[i].sample.address != nullptr)
+        {
+            uint32_t frames = mtProject.sampleMemory[i].isStreamed
+                                ? mtProject.sampleMemory[i].ramFrames
+                                : (mtProject.sampleMemory[i].ramFrames > 0
+                                     ? mtProject.sampleMemory[i].ramFrames
+                                     : mtProject.instrument[i].sample.length);
+            uint32_t ch = (mtProject.sampleMemory[i].isStereo ||
+                           mtProject.sampleMemory[i].address[strSampleMemory::Channel::kRight] !=
+                             mtProject.sampleMemory[i].address[strSampleMemory::Channel::kLeft])
+                            ? 2
+                            : 1;
+            uint8_t* endPtr = reinterpret_cast<uint8_t*>(mtProject.instrument[i].sample.address) +
+                              frames * ch * sizeof(int16_t);
+            if (endPtr > scratchStart)
+            {
+                scratchStart = endPtr;
+            }
+        }
+    }
+
+    uintptr_t alignedStart = (reinterpret_cast<uintptr_t>(scratchStart) + 511u) & ~uintptr_t(511u);
+    uint8_t* ramEnd = reinterpret_cast<uint8_t*>(externalRamSampleMemory) + SAMPLE_MEMORY_SIZE;
+
+    if (channels == 2)
+    {
+        if (ramEnd > reinterpret_cast<uint8_t*>(alignedStart) + (READ_WRITE_BUFOR_SIZE * 2 + 1024))
+        {
+            uint32_t avail = static_cast<uint32_t>(ramEnd - reinterpret_cast<uint8_t*>(alignedStart));
+            if (avail > 8 * 1024 * 1024)
+            {
+                avail = 8 * 1024 * 1024;
+            }
+            uint32_t half = ((avail / 2) - 512) & ~uint32_t(511);
+            outBaseL = reinterpret_cast<uint8_t*>(alignedStart);
+            outBaseR = outBaseL + half + 512;
+            outCapPerChannel = half;
+            return;
+        }
+        uint32_t half = ((READ_WRITE_BUFOR_SIZE / 2) - 512) & ~uint32_t(511);
+        outBaseL = externalRamFileManagerBuffL;
+        outBaseR = externalRamFileManagerBuffL + half + 512;
+        outCapPerChannel = half;
+    }
+    else
+    {
+        if (ramEnd > reinterpret_cast<uint8_t*>(alignedStart) + (READ_WRITE_BUFOR_SIZE + 512))
+        {
+            uint32_t avail = static_cast<uint32_t>(ramEnd - reinterpret_cast<uint8_t*>(alignedStart));
+            if (avail > 8 * 1024 * 1024)
+            {
+                avail = 8 * 1024 * 1024;
+            }
+            uint32_t cap = (avail - 512) & ~uint32_t(511);
+            outBaseL = reinterpret_cast<uint8_t*>(alignedStart);
+            outBaseR = nullptr;
+            outCapPerChannel = cap;
+            return;
+        }
+        uint32_t cap = (READ_WRITE_BUFOR_SIZE - 512) & ~uint32_t(511);
+        outBaseL = externalRamFileManagerBuffL;
+        outBaseR = nullptr;
+        outCapPerChannel = cap;
+    }
+}
+
+uint8_t cFileTransfer::convertWaveToInstrumentFile(
+  FileManagerOperation::SampleLoadData* sampleImportData,
+  const char* destFile,
+  uint32_t destFileOffset,
+  uint32_t targetSampleRate)
+{
+    uint32_t targetChannelBytes = sampleImportData->destSampleCountPerChannel * 2;
+
+    if (transferStep == 0)
+    {
+        char srcFilePath[PATCH_SIZE];
+        snprintf(srcFilePath,
+                 sizeof(srcFilePath),
+                 "%s/%s",
+                 sampleImportData->filePath,
+                 sampleImportData->fileName);
+
+        if (!fileSystem->exists(srcFilePath))
+        {
+            return fileTransferFileNoExist;
+        }
+        if (!fileSystem->exists(destFile))
+        {
+            return fileTransferFileNoValid;
+        }
+
+        auto [isOpen, fileHandle] =
+          fileSystem->openFile(srcFilePath, FileSystem::FileOpenMode::kRead, &transferFile);
+        if (isOpen)
+        {
+            auto [isDestOpen, destHandle] =
+              fileSystem->openFile(destFile, FileSystem::FileOpenMode::kWriteOpen, &transferFile2);
+            if (!isDestOpen)
+            {
+                fileSystem->closeFile(transferFile, false);
+                transferStep = 0;
+                return fileTransferError;
+            }
+
+            sourceMemComplited = 0;
+            convertedDataSize = 0;
+            channelPass = 0;
+            batchFilled = 0;
+            batchWriteOffset = 0;
+            channelBytesFlushed = 0;
+            destDataOffset = destFileOffset;
+
+            findFreeSampleRamScratchStereo(
+              sampleImportData->destChannelCount, batchBufLBase, batchBufRBase, batchCapacity);
+
+            uint32_t filePosL = destDataOffset;
+            batchBufL = batchBufLBase + (filePosL & 3u);
+            if (sampleImportData->destChannelCount == 2)
+            {
+                uint32_t filePosR = destDataOffset + targetChannelBytes;
+                batchBufR = batchBufRBase + (filePosR & 3u);
+            }
+            else
+            {
+                batchBufR = nullptr;
+            }
+
+            conversionConfig.sourceChannelCount = sampleImportData->sourceChannelCount;
+            conversionConfig.sourceBitsPerSample = sampleImportData->sourceBitsPerSample;
+            conversionConfig.sourceSampleRate = sampleImportData->sourceSampleRate;
+            conversionConfig.sourceFormat = sampleImportData->sourceFormat;
+            conversionConfig.destSampleRate = targetSampleRate;
+
+            uint32_t finalFileSize =
+              destDataOffset + targetChannelBytes * sampleImportData->destChannelCount;
+            if (!fileSystem->seekFile(sampleImportData->fileOffset, transferFile) ||
+                !fileSystem->seekFile(finalFileSize, transferFile2) ||
+                !fileSystem->seekFile(destDataOffset, transferFile2))
+            {
+                fileSystem->closeFile(transferFile, false);
+                fileSystem->closeFile(transferFile2, false);
+                transferStep = 0;
+                return fileTransferError;
+            }
+
+            sourceMemTotal = fileSystem->getFileAvailable(transferFile);
+            uint32_t expectedBytes = sampleImportData->sourceAllChannelBytesPerSample *
+                                     sampleImportData->sourceTotalSamplesCountPerChannel;
+            if (sourceMemTotal < expectedBytes)
+            {
+                fileSystem->closeFile(transferFile, false);
+                fileSystem->closeFile(transferFile2, false);
+                transferStep = 0;
+                return fileTransferFileNoValid;
+            }
+            sourceMemTotal = expectedBytes;
+
+            uint32_t maxOutPerStep = (batchCapacity < READ_WRITE_BUFOR_SIZE)
+                                       ? batchCapacity
+                                       : READ_WRITE_BUFOR_SIZE;
+            if (sampleImportData->conversion)
+            {
+                uint32_t bps = sampleImportData->sourceAllChannelBytesPerSample;
+                if (bps == 0)
+                {
+                    bps = 2;
+                }
+                uint32_t maxInputFrames =
+                  (uint32_t)(((uint64_t)(maxOutPerStep / 2) * sampleImportData->sourceSampleRate) /
+                             targetSampleRate);
+                if (maxInputFrames == 0)
+                {
+                    maxInputFrames = 1;
+                }
+                uint32_t maxInputBytes = maxInputFrames * bps;
+                uint32_t bufAligned = (READ_WRITE_BUFOR_SIZE / bps) * bps;
+                memStep = (maxInputBytes < bufAligned) ? maxInputBytes : bufAligned;
+                if (memStep == 0)
+                {
+                    memStep = bps;
+                }
+            }
+            else
+            {
+                memStep = maxOutPerStep;
+            }
+
+            transferStep = 1;
+        }
+    }
+
+    if (transferStep == 1)
+    {
+        uint32_t readSize = (sourceMemTotal - sourceMemComplited < memStep)
+                              ? (sourceMemTotal - sourceMemComplited)
+                              : memStep;
+
+        int32_t bytesReadFromSource =
+          (readSize > 0)
+            ? fileSystem->readFile(externalRamFileManagerSrcBuff, readSize, transferFile)
+            : 0;
+
+        if (bytesReadFromSource < 0)
+        {
+            transferStep = 0;
+            fileSystem->closeFile(transferFile, false);
+            fileSystem->closeFile(transferFile2, false);
+            return fileTransferError;
+        }
+
+        if (bytesReadFromSource > 0)
+        {
+            uint32_t bytesConverted = 0;
+
+            if (sampleImportData->conversion)
+            {
+                conversionConfig.inputData = externalRamFileManagerSrcBuff;
+                conversionConfig.inputSize = bytesReadFromSource;
+                conversionConfig.outPtrL = reinterpret_cast<int16_t*>(batchBufL + batchFilled);
+                conversionConfig.outPtrR =
+                  (sampleImportData->destChannelCount == 2)
+                    ? reinterpret_cast<int16_t*>(batchBufR + batchFilled)
+                    : nullptr;
+
+                uint32_t samplesConverted = convertAudioData(conversionConfig);
+                bytesConverted = samplesConverted * 2;
+            }
+            else
+            {
+                bytesConverted = (uint32_t)bytesReadFromSource;
+                memcpy(batchBufL + batchFilled, externalRamFileManagerSrcBuff, bytesConverted);
+            }
+
+            uint32_t remainingChannel = targetChannelBytes - convertedDataSize;
+            uint32_t toKeep =
+              (bytesConverted > remainingChannel) ? remainingChannel : bytesConverted;
+
+            batchFilled += toKeep;
+            convertedDataSize += toKeep;
+            sourceMemComplited += (uint32_t)bytesReadFromSource;
+            transferBytesComplited += (uint32_t)bytesReadFromSource;
+        }
+
+        bool eofReached = (bytesReadFromSource == 0 || sourceMemComplited >= sourceMemTotal ||
+                           convertedDataSize >= targetChannelBytes);
+        if (eofReached && convertedDataSize < targetChannelBytes)
+        {
+            uint32_t padRoom = batchCapacity - batchFilled;
+            uint32_t padNeeded = targetChannelBytes - convertedDataSize;
+            uint32_t padNow = (padNeeded < padRoom) ? padNeeded : padRoom;
+            if (padNow > 0)
+            {
+                memset(batchBufL + batchFilled, 0, padNow);
+                if (sampleImportData->destChannelCount == 2)
+                {
+                    memset(batchBufR + batchFilled, 0, padNow);
+                }
+                batchFilled += padNow;
+                convertedDataSize += padNow;
+            }
+        }
+
+        if (batchFilled + READ_WRITE_BUFOR_SIZE > batchCapacity || eofReached)
+        {
+            if (batchFilled > 0)
+            {
+                batchWriteOffset = 0;
+                if (!fileSystem->seekFile(destDataOffset + channelBytesFlushed, transferFile2))
+                {
+                    transferStep = 0;
+                    fileSystem->closeFile(transferFile, false);
+                    fileSystem->closeFile(transferFile2, false);
+                    return fileTransferError;
+                }
+                transferStep = 2;
+                return fileTransferInProgress;
+            }
+            else
+            {
+                transferStep = 4;
+            }
+        }
+        else
+        {
+            return fileTransferInProgress;
+        }
+    }
+
+    if (transferStep == 2 || transferStep == 3)
+    {
+        uint8_t* activeBuf = (transferStep == 2) ? batchBufL : batchBufR;
+        uint32_t baseFilePos =
+          (transferStep == 2)
+            ? (destDataOffset + channelBytesFlushed)
+            : (destDataOffset + targetChannelBytes + channelBytesFlushed);
+
+        uint32_t remaining = batchFilled - batchWriteOffset;
+        if (remaining > 0)
+        {
+            uint32_t curFilePos = baseFilePos + batchWriteOffset;
+            uint32_t chunk = remaining;
+            if (batchWriteOffset == 0 && (curFilePos & 511u) != 0)
+            {
+                uint32_t headBytes = 512u - (curFilePos & 511u);
+                if (chunk > headBytes)
+                {
+                    uint32_t alignedRest =
+                      ((chunk - headBytes) > kAlignedWriteChunkSize)
+                        ? kAlignedWriteChunkSize
+                        : ((chunk - headBytes) & ~uint32_t(511u));
+                    if (alignedRest > 0)
+                    {
+                        int32_t wHead =
+                          fileSystem->writeFile(activeBuf, headBytes, transferFile2);
+                        if (wHead != (int32_t)headBytes)
+                        {
+                            transferStep = 0;
+                            fileSystem->closeFile(transferFile, false);
+                            fileSystem->closeFile(transferFile2, false);
+                            return fileTransferError;
+                        }
+                        batchWriteOffset += headBytes;
+                        transferBytesComplited += headBytes;
+                        remaining -= headBytes;
+                        chunk = (remaining > kAlignedWriteChunkSize)
+                                  ? kAlignedWriteChunkSize
+                                  : remaining;
+                        if (chunk > 512u && chunk < remaining)
+                        {
+                            chunk &= ~uint32_t(511u);
+                        }
+                    }
+                }
+            }
+            else if (chunk > kAlignedWriteChunkSize)
+            {
+                chunk = kAlignedWriteChunkSize;
+            }
+            else if (chunk > 512u && chunk < remaining)
+            {
+                chunk &= ~uint32_t(511u);
+            }
+
+            int32_t written =
+              fileSystem->writeFile(activeBuf + batchWriteOffset, chunk, transferFile2);
+            if (written != (int32_t)chunk)
+            {
+                transferStep = 0;
+                fileSystem->closeFile(transferFile, false);
+                fileSystem->closeFile(transferFile2, false);
+                return fileTransferError;
+            }
+            batchWriteOffset += chunk;
+            transferBytesComplited += chunk;
+        }
+
+        if (batchWriteOffset < batchFilled)
+        {
+            return fileTransferInProgress;
+        }
+
+        if (transferStep == 2 && sampleImportData->destChannelCount == 2)
+        {
+            batchWriteOffset = 0;
+            if (!fileSystem->seekFile(
+                  destDataOffset + targetChannelBytes + channelBytesFlushed, transferFile2))
+            {
+                transferStep = 0;
+                fileSystem->closeFile(transferFile, false);
+                fileSystem->closeFile(transferFile2, false);
+                return fileTransferError;
+            }
+            transferStep = 3;
+            return fileTransferInProgress;
+        }
+
+        channelBytesFlushed += batchFilled;
+        batchFilled = 0;
+        batchWriteOffset = 0;
+
+        if (channelBytesFlushed < targetChannelBytes)
+        {
+            uint32_t filePosL = destDataOffset + channelBytesFlushed;
+            batchBufL = batchBufLBase + (filePosL & 3u);
+            if (sampleImportData->destChannelCount == 2)
+            {
+                uint32_t filePosR = destDataOffset + targetChannelBytes + channelBytesFlushed;
+                batchBufR = batchBufRBase + (filePosR & 3u);
+            }
+            transferStep = 1;
+            return fileTransferInProgress;
+        }
+
+        transferStep = 4;
+    }
+
+    if (transferStep == 4)
+    {
+        uint32_t finalFileSize =
+          destDataOffset + targetChannelBytes * sampleImportData->destChannelCount;
+        fileSystem->seekFile(finalFileSize, transferFile2);
+        fileSystem->endFile(transferFile2);
+        transferStep = 0;
+        fileSystem->closeFile(transferFile, false);
+        fileSystem->closeFile(transferFile2, false);
+        return fileTransferEnd;
+    }
+
+    transferStep = 0;
+    fileSystem->closeFile(transferFile, false);
+    fileSystem->closeFile(transferFile2, false);
+    return fileTransferError;
+}
+
+uint8_t cFileTransfer::copyRawDataBetweenFiles(const char* srcFile,
+                                               uint32_t srcOffset,
+                                               const char* destFile,
+                                               uint32_t destOffset,
+                                               uint32_t sizeBytes)
+{
+    if (transferStep == 0)
+    {
+        if (!fileSystem->exists(srcFile))
+        {
+            return fileTransferFileNoExist;
+        }
+        if (!fileSystem->exists(destFile))
+        {
+            return fileTransferFileNoValid;
+        }
+
+        auto [isOpen, srcHandle] =
+          fileSystem->openFile(srcFile, FileSystem::FileOpenMode::kRead, &transferFile);
+        if (isOpen)
+        {
+            auto [isDestOpen, dstHandle] =
+              fileSystem->openFile(destFile, FileSystem::FileOpenMode::kWriteOpen, &transferFile2);
+            if (!isDestOpen)
+            {
+                fileSystem->closeFile(transferFile, false);
+                transferStep = 0;
+                return fileTransferError;
+            }
+
+            if (!fileSystem->seekFile(srcOffset, transferFile) ||
+                !fileSystem->seekFile(destOffset, transferFile2))
+            {
+                fileSystem->closeFile(transferFile, false);
+                fileSystem->closeFile(transferFile2, false);
+                transferStep = 0;
+                return fileTransferError;
+            }
+
+            sourceMemTotal = sizeBytes;
+            sourceMemComplited = 0;
+            batchFilled = 0;
+            batchWriteOffset = 0;
+            channelBytesFlushed = 0;
+            destDataOffset = destOffset;
+            findFreeSampleRamScratchStereo(1, batchBufLBase, batchBufRBase, batchCapacity);
+            batchBufL = batchBufLBase + (destDataOffset & 3u);
+            memStep = READ_WRITE_BUFOR_SIZE;
+            transferStep = 1;
+        }
+    }
+
+    if (transferStep == 1)
+    {
+        uint32_t readSize = (sourceMemTotal - sourceMemComplited < memStep)
+                              ? (sourceMemTotal - sourceMemComplited)
+                              : memStep;
+        if (batchFilled + readSize > batchCapacity)
+        {
+            readSize = batchCapacity - batchFilled;
+        }
+        int32_t bytesRead =
+          (readSize > 0)
+            ? fileSystem->readFile(batchBufL + batchFilled, readSize, transferFile)
+            : 0;
+
+        if (bytesRead < 0)
+        {
+            transferStep = 0;
+            fileSystem->closeFile(transferFile, false);
+            fileSystem->closeFile(transferFile2, false);
+            return fileTransferError;
+        }
+
+        if (bytesRead > 0)
+        {
+            batchFilled += (uint32_t)bytesRead;
+            sourceMemComplited += (uint32_t)bytesRead;
+            transferBytesComplited += (uint32_t)bytesRead;
+        }
+
+        bool eofReached = (bytesRead == 0 || sourceMemComplited >= sourceMemTotal);
+        if (batchFilled + READ_WRITE_BUFOR_SIZE > batchCapacity || eofReached)
+        {
+            if (batchFilled > 0)
+            {
+                batchWriteOffset = 0;
+                transferStep = 2;
+                return fileTransferInProgress;
+            }
+            transferStep = 3;
+        }
+        else
+        {
+            return fileTransferInProgress;
+        }
+    }
+
+    if (transferStep == 2)
+    {
+        uint32_t remaining = batchFilled - batchWriteOffset;
+        if (remaining > 0)
+        {
+            uint32_t curFilePos = destDataOffset + channelBytesFlushed + batchWriteOffset;
+            uint32_t chunk = remaining;
+            if (batchWriteOffset == 0 && (curFilePos & 511u) != 0)
+            {
+                uint32_t headBytes = 512u - (curFilePos & 511u);
+                if (chunk > headBytes)
+                {
+                    int32_t wHead =
+                      fileSystem->writeFile(batchBufL, headBytes, transferFile2);
+                    if (wHead != (int32_t)headBytes)
+                    {
+                        transferStep = 0;
+                        fileSystem->closeFile(transferFile, false);
+                        fileSystem->closeFile(transferFile2, false);
+                        return fileTransferError;
+                    }
+                    batchWriteOffset += headBytes;
+                    remaining -= headBytes;
+                    chunk = (remaining > kAlignedWriteChunkSize)
+                              ? kAlignedWriteChunkSize
+                              : remaining;
+                }
+            }
+            else if (chunk > kAlignedWriteChunkSize)
+            {
+                chunk = kAlignedWriteChunkSize;
+            }
+
+            int32_t written =
+              fileSystem->writeFile(batchBufL + batchWriteOffset, chunk, transferFile2);
+            if (written != (int32_t)chunk)
+            {
+                transferStep = 0;
+                fileSystem->closeFile(transferFile, false);
+                fileSystem->closeFile(transferFile2, false);
+                return fileTransferError;
+            }
+            batchWriteOffset += chunk;
+        }
+
+        if (batchWriteOffset < batchFilled)
+        {
+            return fileTransferInProgress;
+        }
+
+        channelBytesFlushed += batchFilled;
+        batchFilled = 0;
+        batchWriteOffset = 0;
+
+        if (sourceMemComplited < sourceMemTotal)
+        {
+            uint32_t filePosL = destDataOffset + channelBytesFlushed;
+            batchBufL = batchBufLBase + (filePosL & 3u);
+            transferStep = 1;
+            return fileTransferInProgress;
+        }
+        transferStep = 3;
+    }
+
+    if (transferStep == 3)
+    {
+        transferStep = 0;
+        fileSystem->endFile(transferFile2);
+        fileSystem->closeFile(transferFile, false);
+        fileSystem->closeFile(transferFile2, false);
+        return fileTransferEnd;
+    }
+
+    transferStep = 0;
+    fileSystem->closeFile(transferFile, false);
+    fileSystem->closeFile(transferFile2, false);
     return fileTransferError;
 }

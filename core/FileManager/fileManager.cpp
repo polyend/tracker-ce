@@ -12,6 +12,7 @@
 #include "fileTransfer.h"
 #include "FeatureModuleRegistry.h"
 #include "core/interfaceDefs.h"
+#include "instrumentFileValidation.h"
 
 #include "projectEditor/projectEditor.h"
 
@@ -161,8 +162,46 @@ uint8_t cFileManager::getProgress()
 // forceSaveAll - jak narazie nigdzie nie uzywane force=true
 bool cFileManager::saveProjectToWorkspace(bool forceSaveAll)
 {
+    if (workspaceSaveSuspended)
+    {
+        // The change flags stay set, so the save happens after the suspension.
+        return false;
+    }
+
     changesFlags.save_asap = 0;
     return workspaceProjectSave.saveProjectToWorkspace(forceSaveAll);
+}
+
+bool cFileManager::flushWorkspaceSave()
+{
+    bool autosaving =
+      currentOperation == fmSaveWorkspaceProject && status == fmSavingProjectToWorkspace;
+
+    if (currentOperation != fmNoOperation && !autosaving)
+    {
+        return false;
+    }
+
+    // An autosave already under way may have passed the newest changes, so
+    // it is followed by one more save.
+    for (int pass = 0; pass < 2; pass++)
+    {
+        if (currentOperation == fmNoOperation && !saveProjectToWorkspace())
+        {
+            break;
+        }
+        while (currentOperation == fmSaveWorkspaceProject)
+        {
+            update();
+        }
+    }
+
+    return true;
+}
+
+void cFileManager::setWorkspaceSaveSuspended(bool suspended)
+{
+    workspaceSaveSuspended = suspended;
 }
 
 bool cFileManager::openProjectFromWorkspace()
@@ -184,7 +223,8 @@ bool cFileManager::importSamplesToProject(uint8_t fileFrom,
                                           uint8_t instrumentSlot,
                                           uint16_t dataFrom,
                                           uint16_t dataTo,
-                                          bool isLofi)
+                                          bool isLofi,
+                                          FileManagerOperation::SampleLoadMode loadMode)
 {
     stopAutosave();
 
@@ -195,7 +235,8 @@ bool cFileManager::importSamplesToProject(uint8_t fileFrom,
       dataFrom,
       dataTo,
       isLofi,
-      stereoSampleMode ? FileManagerOperation::kLeftAndRight : FileManagerOperation::kLeft);
+      stereoSampleMode ? FileManagerOperation::kLeftAndRight : FileManagerOperation::kLeft,
+      loadMode);
 }
 
 bool cFileManager::importSampleToProject(char* filePath, char* fileName, uint8_t instrumentSlot)
@@ -676,18 +717,30 @@ bool cFileManager::getPtiFileDataOffset(const char* path, uint32_t& dataOffsetOu
         return false;
     }
 
-    strProjectFileHeader instrHeader;
-    memset(&instrHeader, 0, sizeof(instrHeader));
-    int32_t bytesRead = fileSystem->readFile(&instrHeader, sizeof(instrHeader), fileHandle);
+    strInstrumentFile instrumentFile;
+    memset(&instrumentFile, 0, sizeof(instrumentFile));
+    uint32_t fileSize = fileSystem->getFileSize(fileHandle);
+    int32_t bytesRead =
+      fileSystem->readFile(&instrumentFile, sizeof(instrumentFile), fileHandle);
     fileSystem->closeFile(fileHandle);
 
-    if (bytesRead < (int32_t)sizeof(instrHeader) || instrHeader.id_file[0] != 'T' ||
-        instrHeader.id_file[1] != 'I' || instrHeader.size == 0)
+    if (bytesRead < 0)
     {
         return false;
     }
 
-    dataOffsetOut = instrHeader.size + (sizeof(strInstrumentFile) - sizeof(strInstrument));
+    InstrumentFileValidation::Result validation;
+    if (!InstrumentFileValidation::validate((const uint8_t*)&instrumentFile,
+                                            bytesRead,
+                                            fileSize,
+                                            sizeof(strInstrument),
+                                            INSTRUMENT_FILE_VERSION,
+                                            validation))
+    {
+        return false;
+    }
+
+    dataOffsetOut = validation.dataOffset;
     return true;
 }
 

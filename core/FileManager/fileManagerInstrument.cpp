@@ -6,8 +6,10 @@
 #include "fileManager.h"
 #include "fileManagerDefs.h"
 #include "fileTransfer.h"
+#include "instrumentFileValidation.h"
 #include "log.h"
 #include "mtFileManagerOldVersionRecovery.h"
+#include "util_string.h"
 
 #include <algorithm>
 #include <cstring>
@@ -141,8 +143,13 @@ bool cFileManager::startNewInstrumentSampleLoad(int idx,
         bool stereo = isStereo && stereoSampleMode;
         uint32_t channels = stereo ? 2 : 1;
         uint32_t totalBytes = mtProject.instrument[idx].sample.length * channels * sizeof(int16_t);
-        bool shouldStream = (totalBytes >= kStreamThresholdBytes) &&
-                            isPlayModeStreamable(mtProject.instrument[idx].playMode);
+        uint32_t freeRam = (mtProject.max_memory > mtProject.used_memory)
+                             ? (mtProject.max_memory - mtProject.used_memory)
+                             : 0;
+        bool shouldStream = (mtProject.instrument[idx].sample.length > kStreamPreCacheFrames) &&
+                            isPlayModeStreamable(mtProject.instrument[idx].playMode) &&
+                            (mtProject.instrument[idx].isStreamPreferred() || totalBytes > freeRam);
+        mtProject.instrument[idx].setStreamPreferred(shouldStream);
 
         if (shouldStream)
         {
@@ -200,7 +207,11 @@ bool cFileManager::startNewInstrumentSampleLoad(int idx,
         if (isOpen)
         {
             strWavFileHeader sampleHead;
-            readHeader(&sampleHead, fileHandle);
+            if (!readHeader(&sampleHead, fileHandle) || !checkSampleValid(sampleHead))
+            {
+                fileSystem->closeFile(fileHandle);
+                return false;
+            }
 
             uint32_t sourceMemTotal = fileSystem->getFileAvailable(
               fileHandle); // pobiera wielkosc dopiero po przesciu przez header
@@ -324,9 +335,18 @@ bool cFileManager::loadSampleData(int idx,
         bool saveResult = newFileManager.saveSampleDataToWorkspace(idx);
         if (saveResult)
         {
-            char instrPath[PATCH_SIZE];
-            snprintf(instrPath, sizeof(instrPath), cWorkspaceInstrumentFileFormatNew, idx + 1);
-            demoteRamInstrumentToStream(idx, instrPath, sizeof(strInstrumentFile));
+            uint32_t channels = isInstrumentStereo(idx) ? 2 : 1;
+            uint32_t totalBytes =
+              mtProject.instrument[idx].sample.length * channels * sizeof(int16_t);
+            uint32_t freeRam = (mtProject.max_memory > mtProject.used_memory)
+                                 ? (mtProject.max_memory - mtProject.used_memory)
+                                 : 0;
+            if (mtProject.instrument[idx].isStreamPreferred() || totalBytes > freeRam)
+            {
+                char instrPath[PATCH_SIZE];
+                snprintf(instrPath, sizeof(instrPath), cWorkspaceInstrumentFileFormatNew, idx + 1);
+                demoteRamInstrumentToStream(idx, instrPath, sizeof(strInstrumentFile), true);
+            }
 
             // after save old sample as new instrument all is done
             sampleLoadStep = 0;
@@ -515,13 +535,16 @@ bool cFileManager::promoteStreamedInstrumentToRam(int idx)
     mtProject.sampleMemory[idx].hasWaveformPeaks = hadPeaks;
     mtProject.sampleMemory[idx].ramFrames = fullFrames;
     mtProject.sampleMemory[idx].preCacheFrames = fullFrames;
+    mtProject.instrument[idx].setStreamPreferred(false);
+    setInstrumentStructChanged(idx);
     mtProject.used_memory = getSampleMemorySize(0, kSampleInstrumentsCount - 1);
     return true;
 }
 
 bool cFileManager::demoteRamInstrumentToStream(int idx,
                                                const char* backingPtiPath,
-                                               uint32_t dataOffset)
+                                               uint32_t dataOffset,
+                                               bool forceStream)
 {
     if (idx < 0 || idx >= kSampleInstrumentsCount || !mtProject.instrument[idx].isActive ||
         mtProject.sampleMemory[idx].isStreamed)
@@ -534,8 +557,9 @@ bool cFileManager::demoteRamInstrumentToStream(int idx,
     uint32_t channels = stereo ? 2 : 1;
     uint32_t totalBytes = fullFrames * channels * sizeof(int16_t);
 
-    bool shouldStream = (totalBytes >= kStreamThresholdBytes) &&
-                        isPlayModeStreamable(mtProject.instrument[idx].playMode);
+    bool shouldStream =
+      (forceStream ? (fullFrames > kStreamPreCacheFrames) : (totalBytes >= kStreamThresholdBytes)) &&
+      isPlayModeStreamable(mtProject.instrument[idx].playMode);
     if (!shouldStream)
     {
         return false;
@@ -547,13 +571,50 @@ bool cFileManager::demoteRamInstrumentToStream(int idx,
         return false;
     }
 
+    char resolvedPath[PATCH_SIZE];
+    resolvedPath[0] = 0;
+    if (backingPtiPath != nullptr)
+    {
+        strncpy(resolvedPath, backingPtiPath, sizeof(resolvedPath));
+        resolvedPath[sizeof(resolvedPath) - 1] = 0;
+    }
+    uint32_t resolvedOffset = dataOffset;
+    uint32_t fileSize =
+      (resolvedPath[0] != 0 && fileSystem->exists(resolvedPath))
+        ? fileSystem->getFileSize(resolvedPath)
+        : 0;
+
+    if (fileSize <= resolvedOffset || fileSize <= sizeof(strInstrumentFile))
+    {
+        char projectPtiPath[PATCH_SIZE];
+        uint32_t projectDataOffset = resolvedOffset;
+        if (resolveProjectInstrumentPtiPath(idx, projectPtiPath, sizeof(projectPtiPath)) &&
+            getPtiFileDataOffset(projectPtiPath, projectDataOffset))
+        {
+            uint32_t projectFileSize = fileSystem->getFileSize(projectPtiPath);
+            if (projectFileSize > projectDataOffset)
+            {
+                strncpy(resolvedPath, projectPtiPath, sizeof(resolvedPath));
+                resolvedPath[sizeof(resolvedPath) - 1] = 0;
+                resolvedOffset = projectDataOffset;
+                fileSize = projectFileSize;
+            }
+        }
+    }
+
+    if (fileSize < resolvedOffset + totalBytes)
+    {
+        return false;
+    }
+
     if (stereo)
     {
         mtProject.sampleMemory[idx].address[strSampleMemory::Channel::kRight] =
           mtProject.sampleMemory[idx].address[strSampleMemory::Channel::kLeft] + preCache;
     }
 
-    if (!voiceStreamManager.setupInstrumentStream(idx, backingPtiPath, dataOffset, fullFrames, stereo))
+    if (!voiceStreamManager.setupInstrumentStream(
+          idx, resolvedPath, resolvedOffset, fullFrames, stereo))
     {
         if (stereo)
         {
@@ -563,6 +624,8 @@ bool cFileManager::demoteRamInstrumentToStream(int idx,
         return false;
     }
 
+    mtProject.instrument[idx].setStreamPreferred(true);
+    setInstrumentStructChanged(idx);
     int32_t freedBytes = (int32_t)((fullFrames - preCache) * channels * sizeof(int16_t));
     uint8_t firstSlotToMove = calcFirstSlotToMoveInMemory(idx + 1);
     moveSampleMemory(firstSlotToMove, -freedBytes);
@@ -656,35 +719,42 @@ uint8_t cFileManager::saveInstrument(uint8_t idx)
 
 bool cFileManager::loadInstrumentFormFileStruct(strInstrument* instrument,
                                                 strInstrumentFile* instrumentFile,
+                                                uint32_t instrumentFileSize,
                                                 uint32_t& instrumentFileDataOffsetOut)
 {
     instrumentFileDataOffsetOut = 0;
 
-    if (((strInstrumentFile*)instrumentFile)->instrumentDataAndHeader.instrHeader.type !=
-        fileTypeInstrument)
+    InstrumentFileValidation::Result validation;
+    const uint32_t loadedSize =
+      std::min(instrumentFileSize, (uint32_t)sizeof(strInstrumentFile));
+    if (!InstrumentFileValidation::validate((const uint8_t*)instrumentFile,
+                                            loadedSize,
+                                            instrumentFileSize,
+                                            sizeof(strInstrument),
+                                            INSTRUMENT_FILE_VERSION,
+                                            validation))
     {
         return false;
     }
 
-    if (instrumentFile->instrumentDataAndHeader.instrHeader.fileStructureVersion[0] <
-        INSTRUMENT_FILE_VERSION)
+    if (validation.instrumentSize < sizeof(strInstrument))
+    {
+        memset((uint8_t*)&instrumentFile->instrumentDataAndHeader.instrument +
+                 validation.instrumentSize,
+               0,
+               sizeof(strInstrument) - validation.instrumentSize);
+    }
+
+    const uint8_t fileVersion =
+      instrumentFile->instrumentDataAndHeader.instrHeader.fileStructureVersion[0];
+    if (fileVersion < INSTRUMENT_FILE_VERSION)
     {
         //"older version of instrument file opened"
 
-        versionRecovery.translateinstrument(
-          instrumentFile->instrumentDataAndHeader.instrHeader.fileStructureVersion[0],
-          INSTRUMENT_FILE_VERSION,
-          instrumentFile);
-    }
-    else if (instrumentFile->instrumentDataAndHeader.instrHeader.fileStructureVersion[0] >
-             PROJECT_FILE_VERSION)
-    {
-        //"newer version of instrument file opened"
-        // todo: informacja do interfejsu zeby wyswietlic popup
+        versionRecovery.translateinstrument(fileVersion, INSTRUMENT_FILE_VERSION, instrumentFile);
     }
 
-    instrumentFileDataOffsetOut = instrumentFile->instrumentDataAndHeader.instrHeader.size +
-                                  (sizeof(strInstrumentFile) - sizeof(strInstrument));
+    instrumentFileDataOffsetOut = validation.dataOffset;
 
     memcpy(instrument, &instrumentFile->instrumentDataAndHeader.instrument, sizeof(strInstrument));
 
@@ -881,14 +951,9 @@ void cFileManager::checkLoopParameters(struct strInstrument* instr)
 
 void cFileManager::removeWavExtensionFromName(char* fileName)
 {
-    uint32_t fileNameLen = strlen(fileName);
-
-    if (((fileName[fileNameLen - 1] == 'V') || (fileName[fileNameLen - 1] == 'v')) &&
-        ((fileName[fileNameLen - 2] == 'A') || (fileName[fileNameLen - 2] == 'a')) &&
-        ((fileName[fileNameLen - 3] == 'W') || (fileName[fileNameLen - 3] == 'w')) &&
-        (fileName[fileNameLen - 4] == '.'))
+    if (hasFileExtension(fileName, "wav"))
     {
-        fileName[fileNameLen - 4] = 0;
+        fileName[strlen(fileName) - 4] = 0;
     }
 }
 
@@ -897,13 +962,9 @@ void cFileManager::copySampleNameWithoutExtension(char* sampleName, char* fileNa
     strncpy(sampleName, fileName, maxLength);
     sampleName[maxLength] = 0;
 
-    int fileNameLen = strlen(fileName);
-
-    if (((fileName[fileNameLen - 1] == 'V') || (fileName[fileNameLen - 1] == 'v')) &&
-        ((fileName[fileNameLen - 2] == 'A') || (fileName[fileNameLen - 2] == 'a')) &&
-        ((fileName[fileNameLen - 3] == 'W') || (fileName[fileNameLen - 3] == 'w')) &&
-        (fileName[fileNameLen - 4] == '.'))
+    if (hasFileExtension(fileName, "wav"))
     {
+        int fileNameLen = strlen(fileName);
         if ((fileNameLen - 4) <= maxLength)
         {
             sampleName[fileNameLen - 4] = 0;
@@ -913,13 +974,5 @@ void cFileManager::copySampleNameWithoutExtension(char* sampleName, char* fileNa
 
 bool cFileManager::isFilePtiInstrument(char* file)
 {
-    uint32_t fileLen = strlen(file);
-
-    if (((file[fileLen - 1] == 'i') || (file[fileLen - 1] == 'I')) &&
-        ((file[fileLen - 2] == 't') || (file[fileLen - 2] == 'T')) &&
-        ((file[fileLen - 3] == 'p') || (file[fileLen - 3] == 'P')) && (file[fileLen - 4] == '.'))
-    {
-        return true;
-    }
-    return false;
+    return hasFileExtension(file, "pti");
 }
