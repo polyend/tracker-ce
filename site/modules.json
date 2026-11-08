@@ -1,0 +1,42 @@
+{
+  "targets": [
+    {
+      "id": "original",
+      "title": "Original Tracker"
+    },
+    {
+      "id": "plus",
+      "title": "Tracker+"
+    },
+    {
+      "id": "mini",
+      "title": "Tracker Mini"
+    }
+  ],
+  "modules": [
+    {
+      "name": "performance-fx-scenes",
+      "title": "Performance FX Scenes",
+      "description": "Store/recall 8 Performance FX rack snapshots (perfscenes.bin)",
+      "order": 10
+    },
+    {
+      "name": "song-fx-scenes",
+      "title": "Song FX Scenes",
+      "description": "Song FX column + editor for FX type/value scenes (songfxscenes.bin)",
+      "order": 15
+    },
+    {
+      "name": "pattern-launch-scenes",
+      "title": "Pattern Launch Scenes",
+      "description": "Store and recall per-track Performance pattern cues",
+      "order": 20
+    },
+    {
+      "name": "mute-banks",
+      "title": "Mute Banks",
+      "description": "Store and recall sample and MIDI track mute masks",
+      "order": 30
+    }
+  ]
+}

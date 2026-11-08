@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tracker CE — Custom Firmware Builder</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1115;
+      --panel: #1a1f27;
+      --text: #e8ecf1;
+      --muted: #9aa3af;
+      --accent: #6ee7b7;
+      --accent-dim: #34d399;
+      --border: #2a3340;
+      --danger: #f87171;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f4f6f8;
+        --panel: #ffffff;
+        --text: #15202b;
+        --muted: #5b6b7c;
+        --accent: #059669;
+        --accent-dim: #047857;
+        --border: #d7dee7;
+        --danger: #dc2626;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    h1 { font-size: 1.6rem; margin: 0 0 0.35rem; }
+    .lede { color: var(--muted); margin: 0 0 1.5rem; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    h2 { font-size: 1rem; margin: 0 0 0.75rem; }
+    .targets {
+      display: grid;
+      gap: 0.5rem;
+    }
+    label.option {
+      display: flex;
+      gap: 0.65rem;
+      align-items: flex-start;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    label.option:hover { border-color: var(--accent-dim); }
+    label.option input { margin-top: 0.2rem; }
+    .title { font-weight: 600; }
+    .desc { color: var(--muted); font-size: 0.92rem; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 1.25rem;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 0.7rem 1.2rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: #042f1e;
+    }
+    @media (prefers-color-scheme: light) {
+      button { color: #fff; }
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .hint { color: var(--muted); font-size: 0.9rem; }
+    .error { color: var(--danger); margin-top: 0.75rem; display: none; }
+    footer {
+      margin-top: 1.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    a { color: var(--accent-dim); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Custom Firmware Builder</h1>
+    <p class="lede">
+      Pick a Tracker device and the feature modules to include. Creating the GitHub issue
+      starts a free Actions build and posts a download link when the <code>.ptf</code> is ready.
+    </p>
+
+    <section>
+      <h2>Device</h2>
+      <div class="targets" id="targets"></div>
+    </section>
+
+    <section>
+      <h2>Feature modules</h2>
+      <p class="hint" style="margin-top:0">Leave all unchecked for a build with no feature modules.</p>
+      <div class="targets" id="modules"></div>
+    </section>
+
+    <div class="actions">
+      <button type="button" id="request">Create build request</button>
+      <button type="button" class="secondary" id="select-all">Select all modules</button>
+      <button type="button" class="secondary" id="select-none">Select none</button>
+    </div>
+    <p class="error" id="error"></p>
+
+    <footer>
+      Unofficial Community Edition custom builds for
+      <a id="repo-link" href="https://github.com/ramsaylanier/tracker-ce">this repository</a>.
+      Flash the resulting <code>.ptf</code> the same way as any other Tracker CE firmware
+      (<code>/Firmware</code> on the microSD card).
+    </footer>
+  </main>
+
+  <script>
+    function detectRepository() {
+      const host = window.location.hostname;
+      const match = host.match(/^([^.]+)\.github\.io$/);
+      if (match) {
+        const parts = window.location.pathname.split("/").filter(Boolean);
+        if (parts.length >= 1) {
+          return match[1] + "/" + parts[0];
+        }
+      }
+      return "ramsaylanier/tracker-ce";
+    }
+
+    const repository = detectRepository();
+    document.getElementById("repo-link").href = "https://github.com/" + repository;
+    document.getElementById("repo-link").textContent = repository;
+
+    function showError(message) {
+      const el = document.getElementById("error");
+      el.textContent = message;
+      el.style.display = message ? "block" : "none";
+    }
+
+    function selectedTarget() {
+      const checked = document.querySelector('input[name="target"]:checked');
+      return checked ? checked.value : null;
+    }
+
+    function selectedModules() {
+      return Array.from(document.querySelectorAll('input[name="module"]:checked'))
+        .map((el) => el.value);
+    }
+
+    function render(catalog) {
+      const targetsEl = document.getElementById("targets");
+      const modulesEl = document.getElementById("modules");
+      targetsEl.innerHTML = "";
+      modulesEl.innerHTML = "";
+
+      catalog.targets.forEach((target, index) => {
+        const label = document.createElement("label");
+        label.className = "option";
+        label.innerHTML =
+          '<input type="radio" name="target" value="' + target.id + '"' +
+          (index === 0 ? " checked" : "") + " />" +
+          '<span><span class="title">' + target.title + "</span>" +
+          '<div class="desc"><code>' + target.id + "</code></div></span>";
+        targetsEl.appendChild(label);
+      });
+
+      catalog.modules.forEach((module) => {
+        const label = document.createElement("label");
+        label.className = "option";
+        label.innerHTML =
+          '<input type="checkbox" name="module" value="' + module.name + '" checked />' +
+          '<span><span class="title">' + module.title + "</span>" +
+          '<div class="desc">' + (module.description || module.name) + "</div></span>";
+        modulesEl.appendChild(label);
+      });
+    }
+
+    function openIssue() {
+      showError("");
+      const target = selectedTarget();
+      if (!target) {
+        showError("Choose a device.");
+        return;
+      }
+      const modules = selectedModules();
+      const params = new URLSearchParams();
+      params.set("template", "custom-firmware.yml");
+      params.set("target", target);
+      params.set("modules", modules.join(" "));
+      const url = "https://github.com/" + repository + "/issues/new?" + params.toString();
+      window.location.href = url;
+    }
+
+    document.getElementById("request").addEventListener("click", openIssue);
+    document.getElementById("select-all").addEventListener("click", () => {
+      document.querySelectorAll('input[name="module"]').forEach((el) => { el.checked = true; });
+    });
+    document.getElementById("select-none").addEventListener("click", () => {
+      document.querySelectorAll('input[name="module"]').forEach((el) => { el.checked = false; });
+    });
+
+    fetch("modules.json", { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not load modules.json");
+        return response.json();
+      })
+      .then(render)
+      .catch((err) => showError(err.message || String(err)));
+  </script>
+</body>
+</html>

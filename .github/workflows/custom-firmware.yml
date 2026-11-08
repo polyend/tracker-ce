@@ -1,0 +1,267 @@
+name: Custom Firmware Build
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Firmware target
+        required: true
+        type: choice
+        options:
+          - original
+          - plus
+          - mini
+        default: mini
+      modules:
+        description: Space-separated module names (empty = none)
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: custom-firmware
+  cancel-in-progress: false
+
+jobs:
+  build-custom:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' &&
+       contains(join(github.event.issue.labels.*.name, ','), 'firmware-request'))
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve request from issue or workflow_dispatch
+        id: request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          DISPATCH_TARGET: ${{ inputs.target }}
+          DISPATCH_MODULES: ${{ inputs.modules }}
+        run: |
+          set -euo pipefail
+
+          comment_and_close() {
+            local body="$1"
+            if [ "$EVENT_NAME" = "issues" ]; then
+              gh issue comment "$ISSUE_NUMBER" --body "$body"
+              gh issue close "$ISSUE_NUMBER" --reason "completed" || gh issue close "$ISSUE_NUMBER"
+            else
+              echo "$body"
+            fi
+          }
+
+          if [ "$EVENT_NAME" = "issues" ]; then
+            since=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)
+            recent=$(gh issue list \
+              --label firmware-request \
+              --state all \
+              --search "author:${ISSUE_AUTHOR} created:>=${since}" \
+              --json number \
+              --jq "map(select(.number != ${ISSUE_NUMBER})) | length")
+            if [ "${recent:-0}" -gt 0 ]; then
+              comment_and_close "Skipped: you already opened a \`firmware-request\` in the last hour. Please wait and try again."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            printf '%s' "$ISSUE_BODY" > /tmp/issue-body.md
+            set +e
+            python3 scripts/custom_firmware_request.py parse \
+              --body-file /tmp/issue-body.md \
+              --out /tmp/request.json
+            parse_status=$?
+            set -e
+            if [ "$parse_status" -ne 0 ]; then
+              errors=$(python3 -c 'import json; print("; ".join(json.load(open("/tmp/request.json")).get("errors") or ["parse failed"]))')
+              comment_and_close "Could not parse this firmware request: ${errors}"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            # workflow_dispatch: validate inputs without shell-splitting module names unsafely
+            printf '%s' "${DISPATCH_MODULES:-}" > /tmp/modules.txt
+            mapfile -t module_args < <(python3 -c 'import pathlib,re; t=pathlib.Path("/tmp/modules.txt").read_text(); print("\n".join(x for x in re.split(r"[\s,]+", t) if x))')
+            if [ "${#module_args[@]}" -gt 0 ]; then
+              python3 scripts/custom_firmware_request.py from-args \
+                --target "$DISPATCH_TARGET" \
+                --modules "${module_args[@]}" \
+                --out /tmp/request.json
+            else
+              python3 scripts/custom_firmware_request.py from-args \
+                --target "$DISPATCH_TARGET" \
+                --out /tmp/request.json
+            fi
+          fi
+
+          sha=$(git rev-parse HEAD)
+          python3 scripts/custom_firmware_request.py plan \
+            --request-file /tmp/request.json \
+            --sha "$sha" \
+            --out /tmp/plan.json
+
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          plan = json.load(open("/tmp/plan.json"))
+          print("skip=false")
+          print(f"target={plan['target']}")
+          print(f"modules={' '.join(plan['modules'])}")
+          print(f"modules_slug={plan['modules_slug']}")
+          print(f"sha={plan['sha']}")
+          print(f"short_sha={plan['short_sha']}")
+          print(f"tag={plan['tag']}")
+          print(f"asset={plan['asset']}")
+          PY
+
+          python3 -c 'import json; p=json.load(open("/tmp/plan.json")); print("Request: target=%s modules=%s tag=%s" % (p["target"], p["modules_slug"], p["tag"]))'
+
+      - name: Reuse existing prerelease when tag already exists
+        id: reuse
+        if: steps.request.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.request.outputs.tag }}
+          ASSET: ${{ steps.request.outputs.asset }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          TARGET: ${{ steps.request.outputs.target }}
+          MODULES_SLUG: ${{ steps.request.outputs.modules_slug }}
+          SHORT_SHA: ${{ steps.request.outputs.short_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            url="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
+            body=$(printf '%s\n' \
+              "## Custom firmware ready (reused)" \
+              "" \
+              "* **Device:** \`${TARGET}\`" \
+              "* **Modules:** \`${MODULES_SLUG}\`" \
+              "* **Commit:** \`${SHORT_SHA}\`" \
+              "* **Download:** ${url}")
+            if [ "$EVENT_NAME" = "issues" ]; then
+              gh issue comment "$ISSUE_NUMBER" --body "$body"
+              gh issue close "$ISSUE_NUMBER" --reason "completed" || gh issue close "$ISSUE_NUMBER"
+            else
+              echo "$body"
+            fi
+            echo "reused=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache GNU Arm Embedded Toolchain 10.3-2021.10
+        if: steps.request.outputs.skip != 'true' && steps.reuse.outputs.reused != 'true'
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: agt/10.3
+          key: arm-none-eabi-10.3-2021.10-linux-x86_64
+
+      - name: Install GNU Arm Embedded Toolchain 10.3-2021.10
+        if: steps.request.outputs.skip != 'true' && steps.reuse.outputs.reused != 'true' && steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget bzip2 make python3
+          wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+          mkdir -p agt/10.3
+          tar -xjf gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2 -C agt/10.3 --strip-components=1
+          rm gcc-arm-none-eabi-10.3-2021.10-x86_64-linux.tar.bz2
+
+      - name: Build selected firmware
+        id: build
+        if: steps.request.outputs.skip != 'true' && steps.reuse.outputs.reused != 'true'
+        env:
+          TARGET: ${{ steps.request.outputs.target }}
+          MODULES: ${{ steps.request.outputs.modules }}
+          ASSET: ${{ steps.request.outputs.asset }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y make python3
+          if [ -n "${MODULES}" ]; then
+            # MODULES was validated against discover_modules(); split on spaces only.
+            # shellcheck disable=SC2086
+            python3 scripts/build_with_modules.py --no-save --target "$TARGET" --modules $MODULES
+          else
+            python3 scripts/build_with_modules.py --no-save --target "$TARGET" --none
+          fi
+          shopt -s nullglob
+          files=(build/*.ptf)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one .ptf in build/, found: ${files[*]:-none}"
+            exit 1
+          fi
+          cp "${files[0]}" "build/${ASSET}"
+          echo "ptf_path=build/${ASSET}" >> "$GITHUB_OUTPUT"
+          ls -lh "build/${ASSET}"
+
+      - name: Publish prerelease
+        id: release
+        if: steps.request.outputs.skip != 'true' && steps.reuse.outputs.reused != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.request.outputs.tag }}
+          name: Custom ${{ steps.request.outputs.target }} (${{ steps.request.outputs.modules_slug }})
+          body: |
+            Unofficial custom Tracker CE firmware build.
+
+            - **Device:** `${{ steps.request.outputs.target }}`
+            - **Modules:** `${{ steps.request.outputs.modules_slug }}`
+            - **Commit:** `${{ steps.request.outputs.short_sha }}`
+
+            Flash like any other Community Edition `.ptf` (copy to `/Firmware` on the microSD card).
+          files: ${{ steps.build.outputs.ptf_path }}
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+
+      - name: Comment success and close issue
+        if: steps.request.outputs.skip != 'true' && steps.reuse.outputs.reused != 'true' && success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          TARGET: ${{ steps.request.outputs.target }}
+          MODULES_SLUG: ${{ steps.request.outputs.modules_slug }}
+          SHORT_SHA: ${{ steps.request.outputs.short_sha }}
+          TAG: ${{ steps.request.outputs.tag }}
+          ASSET: ${{ steps.request.outputs.asset }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
+          body=$(printf '%s\n' \
+            "## Custom firmware ready" \
+            "" \
+            "* **Device:** \`${TARGET}\`" \
+            "* **Modules:** \`${MODULES_SLUG}\`" \
+            "* **Commit:** \`${SHORT_SHA}\`" \
+            "* **Download:** ${url}")
+          if [ "$EVENT_NAME" = "issues" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "$body"
+            gh issue close "$ISSUE_NUMBER" --reason "completed" || gh issue close "$ISSUE_NUMBER"
+          else
+            echo "$body"
+          fi
+
+      - name: Comment failure and close issue
+        if: failure() && github.event_name == 'issues' && steps.request.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "Custom firmware build failed. See the Actions run: ${RUN_URL}"
+          gh issue close "$ISSUE_NUMBER" --reason "completed" || gh issue close "$ISSUE_NUMBER"

@@ -9,11 +9,13 @@ Examples:
   make select
   python3 scripts/build_with_modules.py --modules performance-fx-scenes --target plus
   python3 scripts/build_with_modules.py --list
+  python3 scripts/build_with_modules.py --catalog site/modules.json
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -248,6 +250,33 @@ def list_modules(modules: list[ModuleInfo]) -> int:
     return 0
 
 
+def catalog_payload(modules: list[ModuleInfo]) -> dict:
+    return {
+        "targets": [
+            {"id": "original", "title": "Original Tracker"},
+            {"id": "plus", "title": "Tracker+"},
+            {"id": "mini", "title": "Tracker Mini"},
+        ],
+        "modules": [
+            {
+                "name": module.name,
+                "title": module.title,
+                "description": module.description,
+                "order": module.order,
+            }
+            for module in modules
+        ],
+    }
+
+
+def write_catalog(modules: list[ModuleInfo], path: Path) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = catalog_payload(modules)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {path} ({len(modules)} module(s))")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build Tracker CE with selected feature modules.")
     parser.add_argument(
@@ -268,6 +297,12 @@ def main() -> int:
         help="Firmware make target (default: all)",
     )
     parser.add_argument("--list", action="store_true", help="List discoverable modules and exit")
+    parser.add_argument(
+        "--catalog",
+        type=Path,
+        metavar="PATH",
+        help="Write feature-module catalog JSON for the web picker and exit",
+    )
     parser.add_argument(
         "--modules-dir",
         type=Path,
@@ -290,6 +325,10 @@ def main() -> int:
 
     if args.list:
         return list_modules(modules)
+
+    if args.catalog is not None:
+        catalog_path = args.catalog if args.catalog.is_absolute() else (ROOT / args.catalog)
+        return write_catalog(modules, catalog_path)
 
     by_name = {m.name: m for m in modules}
 

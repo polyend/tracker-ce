@@ -102,6 +102,16 @@ make ptfx
 make clean
 ```
 
+### 2b. Custom Firmware Builder (web)
+
+Prefer not to install the Arm toolchain locally? Use the **[Custom Firmware Builder](https://ramsaylanier.github.io/tracker-ce/)**:
+
+1. Choose a device and which `feature-modules/` to include.
+2. Create the prefilled GitHub issue (label `firmware-request`).
+3. GitHub Actions builds the `.ptf` and comments with a download link when ready.
+
+These are unofficial Community Edition custom builds. Flash them the same way as any other Tracker CE `.ptf` (see [Flashing on Hardware](#4-flashing-on-hardware--emergency-recovery)).
+
 ### 3. Version Management (`version.mk`)
 All firmware version numbers are defined in [`version.mk`](version.mk). The **Build** identifier displayed on the hardware under **Config > Firmware > Build** is automatically populated from the short Git commit hash (`git rev-parse --short=7 HEAD`):
 
@@ -139,6 +149,7 @@ Full user and developer documentation is available in [`docs/`](docs/Home.md) an
 
 * **User Guides**:
   * [Custom Themes & Fonts](docs/custom_themes_and_fonts.md) + [Live Web Editor](https://polyend.github.io/tracker-theme-editor/) ([`polyend/tracker-theme-editor`](https://github.com/polyend/tracker-theme-editor))
+  * [Custom Firmware Builder](https://ramsaylanier.github.io/tracker-ce/) (select feature modules; Actions builds a `.ptf`)
   * [Wavetable Envelopes, LFOs & Step FX](docs/wavetable_envelopes.md)
   * [SD Card Image Viewer](docs/image_viewer.md)
 * **Developer & Architecture Guides**:

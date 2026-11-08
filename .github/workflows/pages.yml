@@ -1,0 +1,56 @@
+name: Deploy Custom Firmware Builder Site
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'site/**'
+      - 'feature-modules/**'
+      - 'scripts/build_with_modules.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-site:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Regenerate module catalog
+        run: python3 scripts/build_with_modules.py --catalog site/modules.json
+
+      - name: Fail if committed catalog is stale
+        run: |
+          if ! git diff --exit-code -- site/modules.json; then
+            echo "::error::site/modules.json is stale. Run: python3 scripts/build_with_modules.py --catalog site/modules.json"
+            exit 1
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build-site
+    runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

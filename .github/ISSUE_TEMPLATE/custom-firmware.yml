@@ -1,0 +1,33 @@
+name: Custom Firmware Build
+description: Request a custom .ptf with selected feature modules (built by GitHub Actions)
+title: "[Firmware]: custom build"
+labels: ["firmware-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Prefer the [web picker](https://ramsaylanier.github.io/tracker-ce/) — it prefills this form.
+        Creating this issue starts an Actions build. The workflow comments with a `.ptf` download link when finished.
+
+        > These are unofficial Community Edition custom builds. Flash them the same way as any other Tracker CE `.ptf`.
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target Device
+      description: Build firmware for one device per request.
+      options:
+        - original
+        - plus
+        - mini
+    validations:
+      required: true
+
+  - type: input
+    id: modules
+    attributes:
+      label: Feature Modules
+      description: Space-separated module directory names under `feature-modules/` (leave empty for none). Example — `performance-fx-scenes mute-banks`
+      placeholder: performance-fx-scenes song-fx-scenes pattern-launch-scenes mute-banks
+    validations:
+      required: false
