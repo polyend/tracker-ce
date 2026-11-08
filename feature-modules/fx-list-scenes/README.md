@@ -18,6 +18,8 @@ Each of 8 scenes holds up to 8 entries `{fxId, value}` chosen from the live Perf
 
 When a song playlist row starts (or Pattern Step FX `N` fires), every filled entry is applied via the Performance engine (`applyPerformanceFx`) with **no display refresh**.
 
+Apply is **additive**: only non-empty list entries are written. Unlike Performance **Scenes** (full rack snapshot), omitted FX slots are left as-is. A row start and a step-1 `N` on the same moment can both fire — that is intentional.
+
 ## How to use it on the device
 
 ### Assign a scene to a song row

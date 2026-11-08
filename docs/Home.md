@@ -28,7 +28,7 @@ Welcome to the official documentation for **Polyend Tracker Community Edition (C
 * **[Modular Sample Editor Effects & `.ptfx` Developer SDK (`docs/modular_effects_system.md`)](modular_effects_system.md)**
   * Complete C/C++ developer guide (`editor-fx-sdk/`), parameter/host API reference, 472-byte `PtfxHeader` binary spec, and firmware cache/buffer architecture for `.ptfx` Sample Editor effects and generators across all 3 Tracker devices.
 * **[Feature Module SDK (`docs/feature_module_sdk.md`)](feature_module_sdk.md)**
-  * Compile-time C++ modules (`core/modules/`) for project sidecars, Performance Mode pages, Song Mode list columns, and pattern Step FX exports — with Performance FX Scenes as the reference implementation.
+  * Compile-time C++ modules (`core/modules/`) for project sidecars, Performance Mode pages, Song Mode list columns / mode pages, and pattern Step FX exports — reference modules: Performance FX Scenes, FX List Scenes, Pattern Launch Scenes, Mute Banks.
 * **[Repository README - Build Instructions & PR Guidelines (`README.md`)](../README.md)**
   * Top-level build instructions, flashing steps, project philosophy, and contribution rules.
 

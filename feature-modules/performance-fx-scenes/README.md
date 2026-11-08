@@ -45,7 +45,7 @@ After a recall, the title shows `Scenes - N` and that soft button uses the **Act
 | Workspace | `Workspace/perfscenes.bin` |
 | Project | `Projects/<path>/<name>/perfscenes.bin` |
 
-File version **v3** is scenes-only. Older v1/v2 files still load (v2 song-slot bindings are ignored).
+File version **v3** is scenes-only. Older v1/v2 files still load; **v2 song-slot bindings are ignored** (not migrated into `fxlistscenes.bin`). Reassign playlist rows in Song with [`fx-list-scenes`](../fx-list-scenes/) if you used experimental v2 row bindings on this branch.
 
 ## Build
 

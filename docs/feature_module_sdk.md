@@ -41,7 +41,7 @@ FEATURE_MODULE_DIRS ──► module.mk + sources
  FeatureModuleRegistry
         ├── FileManager lifecycle (init / workspace / project)
         ├── PerformancePage cycle (Shift+Perf / Mini Middle)
-        ├── Song list column (getSongListColumn, poll/notify helpers)
+        ├── Song list column / mode pages (getSongListColumn, getSongModePage, poll/notify)
         └── Pattern Step FX catalog (merged into picker at init)
 ```
 
@@ -223,19 +223,19 @@ class ScreenExtension
 
 ### Song list column
 
-One optional focusable column on the Song playlist (between pattern list and tempo). Firmware owns layout/navigation and frame geometry; the module owns meaning.
+One optional column on the Song playlist (between pattern list and tempo). Cells stay visible during playback; **focus (red frame) and encoder edit require Song Rec / edit mode**. Firmware owns layout/navigation and frame geometry; the module owns meaning. The column is not shown on a Song mode page (playlist chrome is hidden).
 
 | Module API | Role |
 | :--- | :--- |
 | `header()` / `formatCell()` | Drawn by `cSongPlayer` (cell text ≤ `kCellTextMax` = 4) |
 | `focusEncoderLabel()` | Pattern +/- label while the column is focused |
-| `onEncoder` / `onClear` | Edit mode input via `SongScreenHost` |
+| `onEncoder` / `onClear` | Rec-mode input via `SongScreenHost` |
 | `onInserted` / `onRemoved` / `clearAll` | Stay aligned with Add/Delete Slot and MOD/IT import |
 | `onSlotStart` | Main-thread hook when song playback enters a row |
 
 ### Song mode page
 
-Optional full page under **Song** (PerformancePage-style). Implements Mini-menu mode **and** page UI/input via `SongModePage` / `asSongModePage()` — **do not** edit `interfaceMenuPopup.cpp` or put product logic in `fSongEdit.cpp`.
+Optional full page under **Song** (PerformancePage-style). One guest type owns **Mini-menu option + UI + input** via `SongModePage` / `asSongModePage()` — **do not** edit `interfaceMenuPopup.cpp` or put product logic in `fSongEdit.cpp`.
 
 | Module API | Role |
 | :--- | :--- |
@@ -247,7 +247,7 @@ Optional full page under **Song** (PerformancePage-style). Implements Mini-menu 
 | `onHorizontalNavigate` | Left/Right; default no-op |
 | `onClearFocused` | Delete; default no-op |
 
-Song firmware only: hide playlist / show param-value list chrome, bind inputs, dispatch to `activeModePage`. Menu dots come from `menuModeCount` / `menuModeOption` (playlist + registered pages; no dots if none).
+Song firmware only: hide playlist / show param-value list chrome, bind inputs, dispatch to `activeModePage`. Menu dots come from `menuModeCount` / `menuModeOption` (playlist + registered pages; **no dots if no mode pages**).
 
 Host helpers: `openModePage` / `closeModePage` / `isModePageOpen`, `setEditorTitle`, `setScreenLabel` / `finishScreenLabels`, `setEditorListCount` / `setEditorListRow` / `setEditorListFocus`, `refreshEditor`.
 
@@ -256,7 +256,7 @@ Firmware helpers (modules do not call these; Song/FileManager/registry do):
 * `pollSongListColumnSlotStarts()` — from `updateAll()`; latches `playlistPos` and calls `onSlotStart`
 * `notifySongPlaylistReplaced()` — MOD/IT import clears column data via `clearAll()`
 
-`getSongListColumn()` / `getSongModePage(i)` return Song extensions (`MODULE_ORDER`). Today the host supports **zero or one** column and **zero or more** mode pages (one active at a time).
+`getSongListColumn()` / `getSongModePage(i)` return Song extensions (`MODULE_ORDER`). Today the host supports **zero or one** column and **zero or more** mode pages (one active at a time; Insert opens the first registered page when none is active).
 
 `SongListColumn::kSongSlotCount` must match `SONG_MAX` (255).
 

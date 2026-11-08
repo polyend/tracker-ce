@@ -7,7 +7,7 @@ External compile-time modules for Tracker CE. Each directory is a self-contained
 | Directory | UI | Sidecar | Order |
 | :--- | :--- | :--- | ---: |
 | [`performance-fx-scenes/`](performance-fx-scenes/README.md) | Perf page **Scenes** | `perfscenes.bin` | 10 |
-| [`fx-list-scenes/`](fx-list-scenes/README.md) | Song FX column + editor | `fxlistscenes.bin` | 15 |
+| [`fx-list-scenes/`](fx-list-scenes/README.md) | Song FX column + FX mode page | `fxlistscenes.bin` | 15 |
 | [`pattern-launch-scenes/`](pattern-launch-scenes/README.md) | Perf page **Patterns** | `patternscenes.bin` | 20 |
 | [`mute-banks/`](mute-banks/README.md) | Perf page **Mutes** | `mutebanks.bin` | 30 |
 
@@ -16,7 +16,7 @@ In Performance Mode, **Shift + Performance** (desktop) or **Middle** (Mini) cycl
 | Feature | Store / edit | Recall / apply |
 | :--- | :--- | :--- |
 | Scenes | Shift + screen button | Screen button — FX rack snapshot |
-| FX List | Song FX column + Insert editor | Song row start / Pattern FX `N` |
+| FX List | Song FX column (Rec) + Song FX mode page | Song row start / Pattern FX `N` (additive apply) |
 | Patterns | Shift + screen button | Screen button — per-track pattern cues |
 | Mutes | Shift + screen button | Screen button — sample + MIDI mute masks |
 
