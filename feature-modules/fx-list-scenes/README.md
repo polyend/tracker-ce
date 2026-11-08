@@ -23,8 +23,11 @@ When a song playlist row starts (or Pattern Step FX `N` fires), every filled ent
 ### Assign a scene to a song row
 
 1. Open **Song** (playlist page).
-2. Focus the **FX** column (between pattern list and tempo).
-3. Encoder sets `-` or scene `1`–`8` for the selected row.
+2. Enable **Rec** (edit/record mode).
+3. Focus the **FX** column (between pattern list and tempo) with Left/Right.
+4. Encoder sets `-` or scene `1`–`8` for the selected row.
+
+The FX column is only selectable (red frame) while Rec is on. It is hidden on the Song FX mode page.
 
 ### Edit a scene’s FX list
 

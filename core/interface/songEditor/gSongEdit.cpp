@@ -426,10 +426,27 @@ void cSongEditor::refreshListColumnButtonLabels()
 
 void cSongEditor::activateLabelsBorder()
 {
+    // Song mode pages own the screen; don't re-show playlist chrome/frames.
+    if (activeModePage != nullptr)
+    {
+        songPlayerData.isListColumnActive = 0;
+        display.setControlHide(frameControl);
+        display.refreshControl(frameControl);
+        refreshListColumnButtonLabels();
+        display.synchronizeRefresh();
+        return;
+    }
+
     if (selectedPlace > frameData.placesCount - 1)
         return;
 
     songPlayerData.isListColumnActive = 0;
+
+    // List column focus (red frame) is record-mode only.
+    if (hasListColumn() && selectedPlace == listColumnPlace() && !editMode)
+    {
+        selectedPlace = 1;
+    }
 
     if (selectedPlace == tempoPlace()) // tempo
     {
@@ -443,9 +460,10 @@ void cSongEditor::activateLabelsBorder()
         display.synchronizeRefresh();
         return;
     }
-    else if (hasListColumn() && selectedPlace == listColumnPlace()) // list column
+    else if (hasListColumn() && selectedPlace == listColumnPlace() && editMode)
     {
-        songPlayerData.isListActive = 1;
+        // Column has its own frame; don't wrap it in the pattern-list selection.
+        songPlayerData.isListActive = 0;
         songPlayerData.isListColumnActive = 1;
         songPlayerData.selection.isActive = 0;
         display.setControlValue(frameControl, selectedPlace);
@@ -536,6 +554,7 @@ void cSongEditor::showModePageScreen()
 {
     titleBar->show();
 
+    songPlayerData.isListColumnActive = 0;
     display.setControlHide(songPlayerControl);
     display.setControlHide(frameControl);
     display.setControlHide(barControl);

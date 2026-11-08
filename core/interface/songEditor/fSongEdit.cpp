@@ -961,9 +961,10 @@ static void functLeft()
     }
     if (!SE->editMode)
     {
+        // Outside record mode the list column is not a focus target (pattern ↔ tempo only).
         if (SE->selectedPlace == SE->tempoPlace())
         {
-            SE->selectedPlace = SE->hasListColumn() ? SE->listColumnPlace() : 1;
+            SE->selectedPlace = 1;
             SE->activateLabelsBorder();
         }
         else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
@@ -1012,9 +1013,10 @@ static void functRight()
     }
     if (!SE->editMode)
     {
+        // Outside record mode the list column is not a focus target (pattern ↔ tempo only).
         if (SE->selectedPlace == 1)
         {
-            SE->selectedPlace = SE->hasListColumn() ? SE->listColumnPlace() : SE->tempoPlace();
+            SE->selectedPlace = SE->tempoPlace();
             SE->activateLabelsBorder();
         }
         else if (SE->hasListColumn() && SE->selectedPlace == SE->listColumnPlace())
@@ -1170,12 +1172,11 @@ void cSongEditor::refreshEditMode()
         display.refreshControl(label[i]);
     }
 
-    if (editMode)
+    if (!editMode)
     {
-    }
-    else
-    {
-        if (selectedPlace == 0)
+        // Tracks matrix and list column are record-mode-only focus targets.
+        if (selectedPlace == 0 ||
+            (hasListColumn() && selectedPlace == listColumnPlace()))
         {
             selectedPlace = 1;
         }
