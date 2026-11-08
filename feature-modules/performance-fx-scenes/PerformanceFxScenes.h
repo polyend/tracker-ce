@@ -13,6 +13,8 @@ static constexpr uint8_t kPerfScenesCount = 8;
 static constexpr uint8_t kPerfScenesNone = 0;
 static constexpr uint16_t kPerfScenesFileVersion = 2;
 static constexpr uint16_t kPerfScenesFileVersionV1 = 1;
+// Stable pattern Step FX id in the module-reserved range [128,143].
+static constexpr uint8_t kPerfFxScenePatternStepFxId = kPatternStepFxModuleIdBase;
 
 struct strPerfScenesFileV1
 {
@@ -75,6 +77,10 @@ class PerformanceFxScenes : public FeatureModule,
     void onRemoved(uint8_t index) override;
     void clearAll() override;
     void onSlotStart(uint8_t slot) override;
+
+    uint8_t patternStepFxCount() const override { return 1; }
+    const PatternStepFxInfo* patternStepFx(uint8_t index) const override;
+    bool onPatternStepFx(uint8_t typeId, uint8_t value) override;
 
     bool isFilled(uint8_t idx) const;
 

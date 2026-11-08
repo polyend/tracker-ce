@@ -31,9 +31,21 @@ class FeatureModuleRegistry
     // First Song list-column extension, or nullptr.
     SongListColumn* getSongListColumn() const;
 
+    // Pattern Step FX catalog collected at initAll.
+    uint8_t patternStepFxCount() const { return patternFxCount; }
+    const PatternStepFxInfo* patternStepFxAt(uint8_t index) const;
+    const PatternStepFxInfo* findPatternStepFx(uint8_t typeId) const;
+    void dispatchPatternStepFx(uint8_t typeId, uint8_t value);
+
   private:
+    void collectPatternStepFx();
+    bool isPatternStepFxLetterTaken(char letter) const;
+
     FeatureModule* modules[kMaxModules] = {};
     uint8_t moduleCount = 0;
+
+    const PatternStepFxInfo* patternFx[kMaxModulePatternStepFx] = {};
+    uint8_t patternFxCount = 0;
 };
 
 void registerFeatureModules(FeatureModuleRegistry& registry);

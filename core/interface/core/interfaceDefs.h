@@ -312,6 +312,8 @@ struct strZoomParams
 class InterfaceGlobals
 {
   public:
+    InterfaceGlobals() { rebuildPatternFxCatalog(); }
+
     char* padNamesPointer[48];
 
     char intrumentsNames[kTotalInstrumentsCount][SAMPLE_NAME_SIZE + 6];
@@ -328,10 +330,11 @@ class InterfaceGlobals
     static constexpr bool invertValForList = true;
 #endif
 
-    uint8_t fxIdToName(uint8_t id)
+    uint8_t getFxCount() const { return fxCount; }
+
+    uint8_t fxIdToName(uint8_t id) const
     {
-        //		uint8_t count;
-        for (uint8_t count = 0; count < FX_COUNT; count++)
+        for (uint8_t count = 0; count < fxCount; count++)
         {
             if (fxIDs[count] == id)
                 return count;
@@ -339,9 +342,9 @@ class InterfaceGlobals
 
         return 0;
     }
-    int16_t fxNameToId(int16_t name)
+    int16_t fxNameToId(int16_t name) const
     {
-        if (name >= FX_COUNT)
+        if (name >= fxCount)
         {
             return 0;
         }
@@ -350,9 +353,9 @@ class InterfaceGlobals
         else
             return name;
     }
-    uint8_t fxNameCount()
+    uint8_t fxNameCount() const
     {
-        for (uint8_t count = 1; count < FX_COUNT; count++)
+        for (uint8_t count = 1; count < fxCount; count++)
         {
             if (fxIDs[count] == 0)
                 return count;
@@ -361,7 +364,9 @@ class InterfaceGlobals
         return 0;
     }
 
-    static constexpr uint8_t fxIDs[FX_COUNT] = {
+    void rebuildPatternFxCatalog();
+
+    static constexpr uint8_t fxBuiltinIDs[FX_BUILTIN_COUNT] = {
         Sequencer::strFxConsts::enFxType::FX_TYPE_NONE,
         Sequencer::strFxConsts::enFxType::FX_TYPE_OFF,
         Sequencer::strFxConsts::enFxType::FX_TYPE_VOLUME,
@@ -413,7 +418,7 @@ class InterfaceGlobals
 
     static constexpr char rndFxName[FX_NAME_SIZE + 4] = "Random Fx";
 
-    static constexpr char fxNames[FX_COUNT][FX_NAME_SIZE + 4] = { "- - None",
+    static constexpr char fxBuiltinNames[FX_BUILTIN_COUNT][FX_NAME_SIZE + 4] = { "- - None",
                                                                   "! - Off",
                                                                   "V - Volume/Velocity",
                                                                   "P - Panning",
@@ -469,7 +474,7 @@ class InterfaceGlobals
                                                                   "0 - MIDI Chord",
                                                                   "x - Break pattern" };
 
-    static constexpr char fxShortNames[FX_COUNT][FX_NAME_SIZE + 4] = { "None",
+    static constexpr char fxBuiltinShortNames[FX_BUILTIN_COUNT][FX_NAME_SIZE + 4] = { "None",
                                                                        "Off",
                                                                        "Volume",
                                                                        "Panning",
@@ -525,75 +530,20 @@ class InterfaceGlobals
                                                                        "MIDI Chord",
                                                                        "Break pattern" };
 
-    static constexpr const char* ptrAllFxNames[FX_COUNT + 1] = {
-        rndFxName,       &fxNames[0][0],  &fxNames[1][0],  &fxNames[2][0],  &fxNames[3][0],
-        &fxNames[4][0],  &fxNames[5][0],  &fxNames[6][0],  &fxNames[7][0],  &fxNames[8][0],
-        &fxNames[9][0],  &fxNames[10][0], &fxNames[11][0], &fxNames[12][0], &fxNames[13][0],
-        &fxNames[14][0], &fxNames[15][0], &fxNames[16][0], &fxNames[17][0], &fxNames[18][0],
-        &fxNames[19][0], &fxNames[20][0], &fxNames[21][0], &fxNames[22][0], &fxNames[23][0],
-        &fxNames[24][0], &fxNames[25][0], &fxNames[26][0], &fxNames[27][0], &fxNames[28][0],
-        &fxNames[29][0], &fxNames[30][0], &fxNames[31][0], &fxNames[32][0], &fxNames[33][0],
-        &fxNames[34][0], &fxNames[35][0], &fxNames[36][0], &fxNames[37][0], &fxNames[38][0],
-        &fxNames[39][0], &fxNames[40][0], &fxNames[41][0], &fxNames[42][0],
-        &fxNames[43][0], &fxNames[44][0], &fxNames[45][0]
-    };
-
-    static constexpr const char* ptrAllFxNamesShort[FX_COUNT + 1] = {
-        rndFxName,
-        &fxShortNames[0][0],
-        &fxShortNames[1][0],
-        &fxShortNames[2][0],
-        &fxShortNames[3][0],
-        &fxShortNames[4][0],
-        &fxShortNames[5][0],
-        &fxShortNames[6][0],
-        &fxShortNames[7][0],
-        &fxShortNames[8][0],
-        &fxShortNames[9][0],
-        &fxShortNames[10][0],
-        &fxShortNames[11][0],
-        &fxShortNames[12][0],
-        &fxShortNames[13][0],
-        &fxShortNames[14][0],
-        &fxShortNames[15][0],
-        &fxShortNames[16][0],
-        &fxShortNames[17][0],
-        &fxShortNames[18][0],
-        &fxShortNames[19][0],
-        &fxShortNames[20][0],
-        &fxShortNames[21][0],
-        &fxShortNames[22][0],
-        &fxShortNames[23][0],
-        &fxShortNames[24][0],
-        &fxShortNames[25][0],
-        &fxShortNames[26][0],
-        &fxShortNames[27][0],
-        &fxShortNames[28][0],
-        &fxShortNames[29][0],
-        &fxShortNames[30][0],
-        &fxShortNames[31][0],
-        &fxShortNames[32][0],
-        &fxShortNames[33][0],
-        &fxShortNames[34][0],
-        &fxShortNames[35][0],
-        &fxShortNames[36][0],
-        &fxShortNames[37][0],
-        &fxShortNames[38][0],
-        &fxShortNames[39][0],
-        &fxShortNames[40][0],
-        &fxShortNames[41][0],
-        &fxShortNames[42][0],
-        &fxShortNames[43][0],
-        &fxShortNames[44][0],
-        &fxShortNames[45][0]
-    };
-
-    static constexpr const char* const* ptrFxNames = &ptrAllFxNames[1];
+    // Runtime FX catalog (builtins + module exports). Rebuilt by rebuildPatternFxCatalog().
+    uint8_t fxCount = FX_BUILTIN_COUNT;
+    uint8_t fxIDs[FX_COUNT_MAX] = {};
+    char fxNames[FX_COUNT_MAX][FX_NAME_SIZE + 4] = {};
+    char fxShortNames[FX_COUNT_MAX][FX_NAME_SIZE + 4] = {};
+    const char* fxDescriptionPtrs[FX_COUNT_MAX] = {};
+    const char* ptrAllFxNames[FX_COUNT_MAX + 1] = {};
+    const char* ptrAllFxNamesShort[FX_COUNT_MAX + 1] = {};
+    const char* const* ptrFxNames = nullptr;
 
     char* fxDescPtr(int16_t id)
     {
-        if (id >= 0)
-            return (char*)fxDescriptions[id];
+        if (id >= 0 && id < static_cast<int16_t>(fxCount))
+            return (char*)fxDescriptionPtrs[id];
         else
             return nullptr;
     }

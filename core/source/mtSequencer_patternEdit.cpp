@@ -1,3 +1,4 @@
+#include "FeatureModuleRegistry.h"
 #include "core/interfaceDefs.h"
 #include "fileManager.h"
 #include "mtAudioEngine.h"
@@ -187,7 +188,8 @@ uint8_t Sequencer::generateRandomFx()
     uint8_t retVal;
     for (uint8_t a = 0; a < 100; a++)
     {
-        retVal = utilMathRandom::random(fx.FX_TYPE_OFF + 1, FX_COUNT - FX_COUNT_HIDDEN_FXes + 1);
+        retVal = utilMathRandom::random(
+          fx.FX_TYPE_OFF + 1, interfaceGlobals.getFxCount() - FX_COUNT_HIDDEN_FXes + 1);
         if (retVal != fx.FX_TYPE_TEMPO && retVal != fx.FX_TYPE_BREAK_PATTERN // breaka nie chcemy
         )
             break;
@@ -1744,6 +1746,11 @@ void Sequencer::setPasteSelection(uint8_t stepFrom,
 //@formatter:off
 AUDIO_CORE_RAM int16_t Sequencer::getFxMax(uint8_t fxID, bool forRandom)
 {
+    if (const PatternStepFxInfo* moduleFx = featureModules.findPatternStepFx(fxID))
+    {
+        return moduleFx->maxValue;
+    }
+
     switch (fxID)
     {
         case fx.FX_TYPE_VOLUME: return 100;
@@ -1791,6 +1798,11 @@ AUDIO_CORE_RAM int16_t Sequencer::getFxMax(uint8_t fxID, bool forRandom)
 
 AUDIO_CORE_RAM int16_t Sequencer::getFxMin(uint8_t fxID, bool forRandom)
 {
+    if (const PatternStepFxInfo* moduleFx = featureModules.findPatternStepFx(fxID))
+    {
+        return moduleFx->minValue;
+    }
+
     switch (fxID)
     {
         case fx.FX_TYPE_MICROMOVE: return 0;
@@ -1811,6 +1823,11 @@ AUDIO_CORE_RAM int16_t Sequencer::getFxMin(uint8_t fxID, bool forRandom)
 }
 int16_t Sequencer::getFxDefault(uint8_t fxID)
 {
+    if (const PatternStepFxInfo* moduleFx = featureModules.findPatternStepFx(fxID))
+    {
+        return moduleFx->defaultValue;
+    }
+
     switch (fxID)
     {
         case fx.FX_TYPE_OFF: return 0;

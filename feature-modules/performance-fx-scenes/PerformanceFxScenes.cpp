@@ -11,6 +11,42 @@ __NOINIT(EXTERNAL_RAM) static strPerfScenesFile externalRamPerfScenesBank;
 
 PerformanceFxScenes performanceFxScenes;
 
+static const PatternStepFxInfo kPerfScenePatternStepFx = {
+    kPerfFxScenePatternStepFxId,
+    'N',
+    "Perf FX Scene",
+    "Perf Scene",
+    "Recall Performance FX scene 1-8.",
+    1,
+    kPerfScenesCount,
+    1,
+};
+
+const PatternStepFxInfo* PerformanceFxScenes::patternStepFx(uint8_t index) const
+{
+    return index == 0 ? &kPerfScenePatternStepFx : nullptr;
+}
+
+bool PerformanceFxScenes::onPatternStepFx(uint8_t typeId, uint8_t value)
+{
+    if (typeId != kPerfFxScenePatternStepFxId)
+    {
+        return false;
+    }
+
+    if (value < 1 || value > kPerfScenesCount)
+    {
+        return true;
+    }
+
+    PerformancePageHost& host = getPerformancePageHost();
+    if (recallScene(host, static_cast<uint8_t>(value - 1)) && host.isShowingFxRack())
+    {
+        host.refreshFxRack();
+    }
+    return true;
+}
+
 void PerformanceFxScenes::init(FileSystem* fileSystem)
 {
     this->fileSystem = fileSystem;
