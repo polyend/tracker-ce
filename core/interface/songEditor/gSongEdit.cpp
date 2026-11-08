@@ -495,7 +495,7 @@ void cSongEditor::activateLabelsBorder()
 
 void cSongEditor::showTempoValue()
 {
-    // FX List page owns the right column + soft button 8; keep tempo chrome hidden.
+    // Song FX mode page owns the right column + soft button 8; keep tempo chrome hidden.
     if (isModePageOpen())
     {
         display.setControlHide(barControl);

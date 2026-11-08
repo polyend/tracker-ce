@@ -4,7 +4,7 @@ All notable changes to the **Polyend Tracker Community Edition (CE)** firmware a
 
 ---
 
-## [Unreleased] — Feature Module SDK + Song FX List Scenes
+## [Unreleased] — Feature Module SDK + Song FX Scenes
 
 ### Added
 
@@ -13,9 +13,9 @@ All notable changes to the **Polyend Tracker Community Edition (CE)** firmware a
    * Modules can export **pattern Step FX** (ids `128`–`143`) into the runtime FX catalog without editing core FX tables.
    * See [`docs/feature_module_sdk.md`](docs/feature_module_sdk.md).
 
-2. **FX List Scenes module (`fx-list-scenes`)**
+2. **Song FX Scenes module (`song-fx-scenes`)**
    * Song playlist **FX** column (`-` / `1`–`8`); focusable only while **Rec** is on.
-   * Song Mini-menu **FX** mode page to edit 8 banks of up to 8 Performance-engine FX type/value pairs (`fxlistscenes.bin`).
+   * Song Mini-menu **FX** mode page to edit 8 banks of up to 8 Performance-engine FX type/value pairs (`songfxscenes.bin`).
    * Pattern Step FX **`N` / FX Scene** (values 1–8) applies the same lists on the main thread.
    * Independent from Performance **Scenes** (`perfscenes.bin` rack snapshots).
 
@@ -24,7 +24,7 @@ All notable changes to the **Polyend Tracker Community Edition (CE)** firmware a
 
 ### Changed
 
-* **`perfscenes.bin` v3** is scenes-only. Legacy v1/v2 still load; **v2 song-row scene bindings are ignored** (no migration into `fxlistscenes.bin` — reassign rows in Song if you used experimental v2 bindings on this branch).
+* **`perfscenes.bin` v3** is scenes-only. Legacy v1/v2 still load; **v2 song-row scene bindings are ignored** (no migration into `songfxscenes.bin` — reassign rows in Song if you used experimental v2 bindings on this branch).
 * Song host keeps chrome/dispatch only; product strings and scene logic live in feature modules.
 
 ---

@@ -1,5 +1,5 @@
-#ifndef FX_LIST_SCENES_H_
-#define FX_LIST_SCENES_H_
+#ifndef SONG_FX_SCENES_H_
+#define SONG_FX_SCENES_H_
 
 #include "FeatureModule.h"
 #include "PerformanceHost.h"
@@ -9,52 +9,52 @@
 
 class FileSystem;
 
-static constexpr uint8_t kFxListScenesCount = 8;
-static constexpr uint8_t kFxListEntriesPerScene = 8;
-static constexpr uint8_t kFxListScenesNone = 0;
-static constexpr uint16_t kFxListScenesFileVersion = 1;
-static constexpr uint8_t kFxListSceneNameLength = 16;
-static constexpr uint8_t kFxListScenePatternStepFxId = kPatternStepFxModuleIdBase;
+static constexpr uint8_t kSongFxScenesCount = 8;
+static constexpr uint8_t kSongFxEntriesPerScene = 8;
+static constexpr uint8_t kSongFxScenesNone = 0;
+static constexpr uint16_t kSongFxScenesFileVersion = 1;
+static constexpr uint8_t kSongFxSceneNameLength = 16;
+static constexpr uint8_t kSongFxScenePatternStepFxId = kPatternStepFxModuleIdBase;
 
-struct strFxListEntry
+struct strSongFxEntry
 {
     uint8_t fxId;     // 0 = empty; else Performance engine FX id
     uint8_t reserved; // packing
     int16_t value;
 };
 
-static_assert(sizeof(strFxListEntry) == 4, "strFxListEntry must be exactly 4 bytes");
+static_assert(sizeof(strSongFxEntry) == 4, "strSongFxEntry must be exactly 4 bytes");
 
-struct strFxListScene
+struct strSongFxScene
 {
-    char name[kFxListSceneNameLength];
-    strFxListEntry entries[kFxListEntriesPerScene];
+    char name[kSongFxSceneNameLength];
+    strSongFxEntry entries[kSongFxEntriesPerScene];
 };
 
-static_assert(sizeof(strFxListScene) % 4 == 0, "strFxListScene must be 4-byte aligned");
+static_assert(sizeof(strSongFxScene) % 4 == 0, "strSongFxScene must be 4-byte aligned");
 
-struct strFxListScenesFile
+struct strSongFxScenesFile
 {
     char magic[4];
     uint16_t version;
     uint16_t count;
-    strFxListScene scenes[kFxListScenesCount];
+    strSongFxScene scenes[kSongFxScenesCount];
     uint8_t songSlotScene[SongListColumn::kSongSlotCount + 1];
 };
 
-static_assert(sizeof(strFxListScenesFile) % 4 == 0,
-              "strFxListScenesFile must be 4-byte aligned for FatFs DMA");
+static_assert(sizeof(strSongFxScenesFile) % 4 == 0,
+              "strSongFxScenesFile must be 4-byte aligned for FatFs DMA");
 static_assert(SongListColumn::kSongSlotCount == 255,
               "SongListColumn::kSongSlotCount must match SONG_MAX");
 
-// Song Mode FX list scenes: column + mode page + pattern Step FX launcher.
-class FxListScenes : public FeatureModule,
+// Song FX Scenes: column + mode page + pattern Step FX launcher.
+class SongFxScenes : public FeatureModule,
                      public ScreenExtension,
                      public SongListColumn,
                      public SongModePage
 {
   public:
-    const char* id() const override { return "fxlistscenes"; }
+    const char* id() const override { return "songfxscenes"; }
 
     void init(FileSystem* fileSystem) override;
     void onWorkspaceClear() override;
@@ -119,6 +119,6 @@ class FxListScenes : public FeatureModule,
     uint8_t focusedField = 0; // 0 = FX type, 1 = value
 };
 
-extern FxListScenes fxListScenes;
+extern SongFxScenes songFxScenes;
 
-#endif /* FX_LIST_SCENES_H_ */
+#endif /* SONG_FX_SCENES_H_ */

@@ -9,7 +9,7 @@ Store and recall snapshots of the Performance FX rack during a live set.
 | Slots | 8 |
 | Build order | `MODULE_ORDER` 10 (first in the page cycle) |
 
-Song-row FX launches and Pattern Step FX scene triggers live in the separate [`fx-list-scenes`](../fx-list-scenes/) module.
+Song-row FX launches and Pattern Step FX scene triggers live in the separate [`song-fx-scenes`](../song-fx-scenes/) module.
 
 ## What it does
 
@@ -45,7 +45,7 @@ After a recall, the title shows `Scenes - N` and that soft button uses the **Act
 | Workspace | `Workspace/perfscenes.bin` |
 | Project | `Projects/<path>/<name>/perfscenes.bin` |
 
-File version **v3** is scenes-only. Older v1/v2 files still load; **v2 song-slot bindings are ignored** (not migrated into `fxlistscenes.bin`). Reassign playlist rows in Song with [`fx-list-scenes`](../fx-list-scenes/) if you used experimental v2 row bindings on this branch.
+File version **v3** is scenes-only. Older v1/v2 files still load; **v2 song-slot bindings are ignored** (not migrated into `songfxscenes.bin`). Reassign playlist rows in Song with [`song-fx-scenes`](../song-fx-scenes/) if you used experimental v2 row bindings on this branch.
 
 ## Build
 

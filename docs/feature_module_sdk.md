@@ -330,7 +330,7 @@ bool onPatternStepFx(uint8_t typeId, uint8_t value) override
 | [`performance-fx-scenes/`](../feature-modules/performance-fx-scenes) | Performance page **Scenes** (rack snapshots) | `perfscenes` | 10 |
 | [`pattern-launch-scenes/`](../feature-modules/pattern-launch-scenes) | Performance page **Patterns** | `patternscenes` | 20 |
 | [`mute-banks/`](../feature-modules/mute-banks) | Performance page **Mutes** | `mutebanks` | 30 |
-| [`fx-list-scenes/`](../feature-modules/fx-list-scenes) | Song column **FX**; Song menu FX page; pattern FX **N - FX Scene** (id 128, values 1–8) | `fxlistscenes` | 15 |
+| [`song-fx-scenes/`](../feature-modules/song-fx-scenes) | Song column **FX**; Song menu FX page; pattern FX **N - FX Scene** (id 128, values 1–8) | `songfxscenes` | 15 |
 
 Bundled modules use only SDK headers + `ModuleSidecar` + hosts.
 

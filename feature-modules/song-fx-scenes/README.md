@@ -1,4 +1,4 @@
-# FX List Scenes
+# Song FX Scenes
 
 Independent banks of Performance-engine FX type + value pairs. Edited from the **Song** FX page, assigned per playlist row via the Song **FX** column, and launched with Pattern Step FX `N`.
 
@@ -6,7 +6,7 @@ Independent banks of Performance-engine FX type + value pairs. Edited from the *
 | :--- | :--- |
 | Song column | **FX** (`-` / `1`–`8`) |
 | Editor | `SongModePage` (Mini menu dots: playlist / FX; Song host only dispatches) |
-| Sidecar | `fxlistscenes.bin` |
+| Sidecar | `songfxscenes.bin` |
 | Pattern Step FX | `N` / **FX Scene** (values 1–8) |
 | Performance page | none |
 
@@ -52,11 +52,11 @@ In the pattern FX picker, **FX Scene** (`N`) recalls scene 1–8 the same way as
 
 | Location | File |
 | :--- | :--- |
-| Workspace | `Workspace/fxlistscenes.bin` |
-| Project | `Projects/<path>/<name>/fxlistscenes.bin` |
+| Workspace | `Workspace/songfxscenes.bin` |
+| Project | `Projects/<path>/<name>/songfxscenes.bin` |
 
 ## Build
 
 ```bash
-make select   # enable FX List Scenes
+make select   # enable Song FX Scenes
 ```
