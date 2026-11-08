@@ -49,8 +49,11 @@ class PatternLaunchScenes : public FeatureModule, public PerformancePage
     void saveToWorkspace();
     void storeScene(PerformancePageHost& host, uint8_t idx, const char* name);
     bool recallScene(PerformancePageHost& host, uint8_t idx);
+    void setActiveSlot(uint8_t idx);
+    void refreshPage(PerformancePageHost& host);
 
     FileSystem* fileSystem = nullptr;
+    uint8_t activeSlot = 0xFF; // 0..7, or 0xFF if none
 };
 
 extern PatternLaunchScenes patternLaunchScenes;

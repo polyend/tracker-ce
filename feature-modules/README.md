@@ -6,9 +6,9 @@ External compile-time modules for Tracker CE. Each directory is a self-contained
 
 | Directory | Page title | Sidecar | Cycle order |
 | :--- | :--- | :--- | ---: |
-| [`performance-fx-scenes/`](performance-fx-scenes/) | Scenes | `perfscenes.bin` | 10 |
-| [`pattern-launch-scenes/`](pattern-launch-scenes/) | Patterns | `patternscenes.bin` | 20 |
-| [`mute-banks/`](mute-banks/) | Mutes | `mutebanks.bin` | 30 |
+| [`performance-fx-scenes/`](performance-fx-scenes/README.md) | Scenes | `perfscenes.bin` | 10 |
+| [`pattern-launch-scenes/`](pattern-launch-scenes/README.md) | Patterns | `patternscenes.bin` | 20 |
+| [`mute-banks/`](mute-banks/README.md) | Mutes | `mutebanks.bin` | 30 |
 
 In Performance Mode, **Shift + Performance** (desktop) or **Middle** (Mini) cycles these pages in `MODULE_ORDER`, then returns to the track strip.
 
@@ -52,6 +52,7 @@ make all FEATURE_MODULE_DIRS=
 
 ```text
 my-module/
+├── README.md              # How the module works on-device
 ├── module.mk              # MODULE_NAME, MODULE_TITLE, MODULE_DESCRIPTION, MODULE_ORDER, ...
 ├── MyModule.h
 └── MyModule.cpp

@@ -94,8 +94,11 @@ class PerformanceFxScenes : public FeatureModule,
     bool recallScene(PerformancePageHost& host, uint8_t idx);
     void clampSongSlotScenes();
     void assignSlot(uint8_t slot, uint8_t scene);
+    void setActiveSlot(uint8_t idx);
+    void refreshPage(PerformancePageHost& host);
 
     FileSystem* fileSystem = nullptr;
+    uint8_t activeSlot = 0xFF; // 0..7, or 0xFF if none
 };
 
 extern PerformanceFxScenes performanceFxScenes;

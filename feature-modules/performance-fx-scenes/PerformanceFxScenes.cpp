@@ -128,6 +128,45 @@ void PerformanceFxScenes::clearBank()
     externalRamPerfScenesBank.magic[3] = 'S';
     externalRamPerfScenesBank.version = kPerfScenesFileVersion;
     externalRamPerfScenesBank.count = kPerfScenesCount;
+    activeSlot = 0xFF;
+}
+
+void PerformanceFxScenes::setActiveSlot(uint8_t idx)
+{
+    activeSlot = (idx < kPerfScenesCount) ? idx : 0xFF;
+}
+
+void PerformanceFxScenes::refreshPage(PerformancePageHost& host)
+{
+    static const char* const sceneSlotLabels[kPerfScenesCount] = {
+        "1", "2", "3", "4", "5", "6", "7", "8"
+    };
+
+    if (activeSlot < kPerfScenesCount)
+    {
+        char titleBuf[24];
+        snprintf(titleBuf, sizeof(titleBuf), "Scenes · %u", static_cast<unsigned>(activeSlot + 1));
+        host.setPageTitle(titleBuf);
+    }
+    else
+    {
+        host.setPageTitle(title());
+    }
+
+    for (uint8_t i = 0; i < kPerfScenesCount; i++)
+    {
+        PerformanceLabelState state = PerformanceLabelState::Empty;
+        if (i == activeSlot)
+        {
+            state = PerformanceLabelState::Active;
+        }
+        else if (isFilled(i))
+        {
+            state = PerformanceLabelState::Filled;
+        }
+        host.setScreenLabel(i, sceneSlotLabels[i], state);
+    }
+    host.finishScreenLabels();
 }
 
 bool PerformanceFxScenes::validateHeader() const
@@ -242,6 +281,7 @@ bool PerformanceFxScenes::recallScene(PerformancePageHost& host, uint8_t idx)
     }
 
     host.recallFxScene(externalRamPerfScenesBank.scenes[idx]);
+    setActiveSlot(idx);
     return true;
 }
 
@@ -396,16 +436,7 @@ void PerformanceFxScenes::onSlotStart(uint8_t slot)
 
 void PerformanceFxScenes::onShow(PerformancePageHost& host)
 {
-    static const char* const sceneSlotLabels[kPerfScenesCount] = {
-        "1", "2", "3", "4", "5", "6", "7", "8"
-    };
-
-    host.setPageTitle(title());
-    for (uint8_t i = 0; i < kPerfScenesCount; i++)
-    {
-        host.setScreenLabel(i, sceneSlotLabels[i], isFilled(i));
-    }
-    host.finishScreenLabels();
+    refreshPage(host);
 }
 
 void PerformanceFxScenes::onHide(PerformancePageHost& host)
@@ -425,10 +456,11 @@ void PerformanceFxScenes::onScreenButton(PerformancePageHost& host, uint8_t butt
         char name[kPerfFxSceneNameLength];
         snprintf(name, sizeof(name), "Scene %d", button + 1);
         storeScene(host, button, name);
-        onShow(host);
+        refreshPage(host);
     }
     else if (recallScene(host, button))
     {
         host.refreshFxRack();
+        refreshPage(host);
     }
 }

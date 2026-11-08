@@ -92,6 +92,59 @@ void MuteBanks::clearBank()
     externalRamMuteBanksBank.magic[3] = 'E';
     externalRamMuteBanksBank.version = kMuteBanksFileVersion;
     externalRamMuteBanksBank.count = kMuteBanksCount;
+    activeSlot = 0xFF;
+}
+
+void MuteBanks::setActiveSlot(uint8_t idx)
+{
+    activeSlot = (idx < kMuteBanksCount) ? idx : 0xFF;
+}
+
+void MuteBanks::refreshPage(PerformancePageHost& host)
+{
+    static const char* const slotLabels[kMuteBanksCount] = {
+        "1", "2", "3", "4", "5", "6", "7", "8"
+    };
+
+    if (activeSlot < kMuteBanksCount)
+    {
+        char titleBuf[24];
+        snprintf(titleBuf, sizeof(titleBuf), "Mutes · %u", static_cast<unsigned>(activeSlot + 1));
+        host.setPageTitle(titleBuf);
+    }
+    else
+    {
+        host.setPageTitle(title());
+    }
+
+    const bool midiPage = host.tracksPage() != 0;
+
+    for (uint8_t i = 0; i < kMuteBanksCount; i++)
+    {
+        // Secondary line: live mute for the track under this soft button
+        // (sample page 1-8 or MIDI page 1-8).
+        const bool muted =
+          midiPage ? host.isMidiTrackMuted(i) : host.isSampleTrackMuted(i);
+        const char* muteText = muted ? "Mute" : "Unmute";
+
+        PerformanceLabelState state = PerformanceLabelState::Empty;
+        if (i == activeSlot)
+        {
+            // Active bank wins; mute status still shown on the secondary line.
+            state = PerformanceLabelState::Active;
+        }
+        else if (muted)
+        {
+            state = PerformanceLabelState::Muted;
+        }
+        else if (isFilled(i))
+        {
+            state = PerformanceLabelState::Filled;
+        }
+
+        host.setScreenLabel(i, slotLabels[i], state, muteText);
+    }
+    host.finishScreenLabels();
 }
 
 bool MuteBanks::validateHeader() const
@@ -175,21 +228,13 @@ bool MuteBanks::recallScene(PerformancePageHost& host, uint8_t idx)
     }
 
     host.recallMuteScene(externalRamMuteBanksBank.scenes[idx]);
+    setActiveSlot(idx);
     return true;
 }
 
 void MuteBanks::onShow(PerformancePageHost& host)
 {
-    static const char* const slotLabels[kMuteBanksCount] = {
-        "1", "2", "3", "4", "5", "6", "7", "8"
-    };
-
-    host.setPageTitle(title());
-    for (uint8_t i = 0; i < kMuteBanksCount; i++)
-    {
-        host.setScreenLabel(i, slotLabels[i], isFilled(i));
-    }
-    host.finishScreenLabels();
+    refreshPage(host);
 }
 
 void MuteBanks::onHide(PerformancePageHost& host)
@@ -209,10 +254,10 @@ void MuteBanks::onScreenButton(PerformancePageHost& host, uint8_t button, uint8_
         char name[kPerfFxSceneNameLength];
         snprintf(name, sizeof(name), "Mute %d", button + 1);
         storeScene(host, button, name);
-        onShow(host);
+        refreshPage(host);
     }
-    else
+    else if (recallScene(host, button))
     {
-        recallScene(host, button);
+        refreshPage(host);
     }
 }

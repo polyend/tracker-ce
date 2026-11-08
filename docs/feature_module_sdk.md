@@ -181,9 +181,11 @@ class PerformancePage
 
 `PerformancePageHost` (firmware) is the only UI/engine API a page should call:
 
-* `setPageTitle`, `setScreenLabel`, `finishScreenLabels`
+* `setPageTitle`, `setScreenLabel(index, text, state, text2=nullptr)`, `finishScreenLabels`
+  * `PerformanceLabelState`: `Empty` / `Filled` / `Active` / `Muted`
+  * `Active` defaults secondary text to `"Active"` when `text2` is omitted
 * `restoreTrackLabels`, `refreshFxRack`, `isShowingFxRack`
-* `isShiftPressed`
+* `isShiftPressed`, `tracksPage`, `isSampleTrackMuted`, `isMidiTrackMuted`
 * `captureFxScene` / `recallFxScene` (`strPerfScene` — 12 FX slots)
 * `capturePatternScene` / `recallPatternScene` (`strPatternScene`)
 * `captureMuteScene` / `recallMuteScene` (`strMuteScene`)
