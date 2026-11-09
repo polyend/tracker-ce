@@ -18,7 +18,8 @@
 const char* const OffOnNames[] = { "Off", "On" };
 static const int synthModelListImages[Synth::kSynthTypes.size()] = {
     enDisplayBitmaps::kBitmapACD,  enDisplayBitmaps::kBitmapFAT,  enDisplayBitmaps::kBitmapVAP,
-    enDisplayBitmaps::kBitmapWTFM, enDisplayBitmaps::kBitmapPERC, enDisplayBitmaps::kBitmapDIRT, enDisplayBitmaps::kBitmapCHIP
+    enDisplayBitmaps::kBitmapWTFM, enDisplayBitmaps::kBitmapPERC, enDisplayBitmaps::kBitmapDIRT, enDisplayBitmaps::kBitmapCHIP,
+    enDisplayBitmaps::kBitmapWTFM // FM4 has no badge of its own yet: shares the FM-style WTFM one
 };
 
 static cInstrumentEditor* IE = &instrumentEditor;
