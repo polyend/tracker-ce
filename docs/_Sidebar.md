@@ -6,6 +6,7 @@
 #### User Guides
 * **[Custom Themes & Fonts](custom_themes_and_fonts)**
 * **[Wavetable Envelopes & LFOs](wavetable_envelopes)**
+* **[FM4 Synth Engine](synth_fm4)**
 * **[SD Card Image Viewer](image_viewer)**
 * **[Modular Effects (.ptfx)](modular_effects_system)**
 

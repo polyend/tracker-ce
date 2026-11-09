@@ -3,6 +3,7 @@
 
 #include "PolySynth/sdk/InstrumentTypeRegistry.h"
 #include "engines/ChiptuneSynthVoice.h"
+#include "engines/FourOpFMSynthVoice.h"
 
 namespace polysynth
 {
@@ -33,6 +34,8 @@ void InstrumentTypeRegistry::registerInstrumentTypes(
     // Open-Source Custom Synth Engines
     registry.addInstrumentType(static_cast<int>(InstrumentTypeId::kChiptuneSynth),
                                createChiptuneSynth());
+    registry.addInstrumentType(static_cast<int>(InstrumentTypeId::kFourOpFMSynth),
+                               createFourOpFMSynth());
 }
 
 } // namespace polysynth

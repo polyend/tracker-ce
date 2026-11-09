@@ -14,6 +14,8 @@ Welcome to the official documentation for **Polyend Tracker Community Edition (C
   * Complete guide to the 256-shape `WT Env` and `WT LFO` instrument modulators, dual-axis `Warp X/Y` shaping, `w` / `y` pattern step FX, and loading custom `.wav` contours from `/Envelopes/`.
 * **[Modular Sample Editor Effects - User & Architecture Guide (`docs/modular_effects_system.md`)](modular_effects_system.md)**
   * Overview of hot-loadable `.ptfx` Sample Editor effects and generators (`/Effects/*.ptfx`), bundled reference plugins, and hardware memory/cache architecture.
+* **[`FM4` Four-Operator FM Synth Engine (`docs/synth_fm4.md`)](synth_fm4.md)**
+  * The eight algorithms, Patch Editor sections, modulator envelope, default macros and implementation notes for the open-source `FM4` engine (Tracker+ & Tracker Mini).
 * **[SD Card Image Viewer (`docs/image_viewer.md`)](image_viewer.md)**
   * How to prepare and view up to 48 baseline JPEGs (`800 × 390` px) per folder in `/Images/Reference/`, `/Images/Notes/`, and `/Images/Custom/` under `Config > Info`.
 

@@ -22,14 +22,15 @@ static const uint16_t framesPlacesSynth[1][4] = {
 };
 
 const char* const synthModelNames[Synth::kSynthTypes.size()] = {
-    "ACD", "FAT", "VAP", "WTFM", "PERC", "DIRT", "CHIP",
+    "ACD", "FAT", "VAP", "WTFM", "PERC", "DIRT", "CHIP", "FM4",
 };
 
 static const int synthModelListImages[Synth::kSynthTypes.size()] = {
     enDisplayBitmaps::kBitmapMiniACD,  enDisplayBitmaps::kBitmapMiniFAT,
     enDisplayBitmaps::kBitmapMiniVAP,  enDisplayBitmaps::kBitmapMiniWTFM,
     enDisplayBitmaps::kBitmapMiniPERC, enDisplayBitmaps::kBitmapMiniDIRT,
-    enDisplayBitmaps::kBitmapMiniCHIP
+    enDisplayBitmaps::kBitmapMiniCHIP,
+    enDisplayBitmaps::kBitmapMiniWTFM // FM4 has no badge of its own yet: shares the FM-style WTFM one
 };
 
 static cInstrumentEditor* IE = &instrumentEditor;

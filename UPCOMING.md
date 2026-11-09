@@ -32,6 +32,11 @@
 	* Added an opt-in USB CDC-ACM serial console (`ENABLE_DEV_CONSOLE` when a `/.develop` file is present on the SD card) with commands for automated host testing (`ping`, `storage on|off`, `flash <name>`, `reboot`, `help`) and a ring-buffered `ENABLE_LOG` build flag that preserves release optimization levels.
 	* See [`docs/developer_guide.md`](docs/developer_guide.md) for usage details.
 
+7. **New `FM4` Four-Operator FM Synth Engine (Tracker+ & Tracker Mini)**
+	* Added an open-source four-operator phase-modulation synth with **8 routing algorithms**, per-operator ratio (`x0.25`-`x12`) and level, operator-4 feedback, a dedicated modulator envelope, vibrato, glide and a low-pass filter.
+	* Appended at the end of the synth model list, so existing projects and patches are unaffected. It currently shares the `WTFM` badge artwork.
+	* See [`docs/synth_fm4.md`](docs/synth_fm4.md). Not yet hardware-tested.
+
 ### Changed & Fixed
 
 * **`CHIP` Synth Engine Performance Overhaul (Tracker+ & Tracker Mini)**:
