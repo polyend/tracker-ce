@@ -43,6 +43,7 @@
 
 8. **USB Serial Development Console & Release Logging (Tracker+ & Tracker Mini)**
 	* Added an opt-in USB CDC-ACM serial console (`ENABLE_DEV_CONSOLE` when a `/.develop` file is present on the SD card) with commands for automated host testing (`ping`, `storage on|off`, `flash <name>`, `reboot`, `help`) and a ring-buffered `ENABLE_LOG` build flag that preserves release optimization levels.
+	* With `ENABLE_DEV_CONSOLE`, a CPU fault (hard, memory-management, bus or usage fault) is reported on the console as `@fault pc=... lr=...` plus a rough call chain, instead of freezing the device silently.
 	* See [`docs/developer_guide.md`](docs/developer_guide.md) for usage details.
 
 ### Changed & Fixed
