@@ -189,6 +189,9 @@ constexpr uint32_t kFrameControlBytes = 8172;
 // has gone into building.
 constexpr uint32_t kUploadWordsPerPass = 320;
 constexpr uint32_t kBuildBudgetUs = 1000;
+// A stretch of at least this many words is worth sending in the background
+// where the driver can do that.
+constexpr uint32_t kBackgroundWords = 48;
 constexpr uint8_t kFirstRomFont = 16;
 constexpr uint8_t kLastRomFont = 34;
 constexpr uint8_t kRomFontsKept = 2;
@@ -871,16 +874,31 @@ void cDisplay::continueUpload(uint32_t maxWords)
         return;
     }
 
+    if (!displayDriver->isDisplayListWriteDone())
+    {
+        return;
+    }
+
+    bool background = displayDriver->writesDisplayListInBackground();
     while (uploadRun < uploadRunCount && maxWords > 0)
     {
         const uint32_t end = uploadRuns[uploadRun].end;
         uint32_t words = end - uploadNext;
-        if (words > maxWords)
+        if (background && words >= kBackgroundWords)
         {
-            words = maxWords;
+            // Goes out on its own; the next pass looks whether it is done.
+            displayDriver->startDisplayListWrite(uploadNext * 4, &frameWords[uploadNext], words);
+            maxWords = 0;
         }
-        displayDriver->writeDisplayList(uploadNext * 4, &frameWords[uploadNext], words);
-        maxWords -= words;
+        else
+        {
+            if (words > maxWords)
+            {
+                words = maxWords;
+            }
+            displayDriver->writeDisplayList(uploadNext * 4, &frameWords[uploadNext], words);
+            maxWords -= words;
+        }
         uploadNext += words;
         if (uploadNext == end)
         {
@@ -888,7 +906,7 @@ void cDisplay::continueUpload(uint32_t maxWords)
             uploadNext = uploadRun < uploadRunCount ? uploadRuns[uploadRun].start : 0;
         }
     }
-    if (uploadRun == uploadRunCount && uploadSwaps)
+    if (uploadRun == uploadRunCount && uploadSwaps && displayDriver->isDisplayListWriteDone())
     {
         uploadSwaps = false;
         displayDriver->swapDisplayList();
@@ -1178,7 +1196,7 @@ void cDisplay::processDisplayUpdateImmediate()
     {
         return;
     }
-    if (uploadSwaps)
+    while (uploadSwaps)
     {
         continueUpload(kFrameWords);
     }
@@ -1198,6 +1216,10 @@ void cDisplay::processDisplayUpdateImmediate()
     }
     swapInFlight = false;
     renderFrame(UINT32_MAX, kFrameWords);
+    while (uploadSwaps)
+    {
+        continueUpload(kFrameWords);
+    }
 }
 
 bool cDisplay::isControlsRefreshProcessIdle()

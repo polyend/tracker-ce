@@ -48,6 +48,11 @@ class DisplayDriverImpl : public DisplayDriver
     virtual void stopStreamDma() override;
 
     virtual void writeDisplayList(uint32_t offset, const uint32_t* words, uint32_t count) override;
+    virtual bool writesDisplayListInBackground() override { return true; }
+    virtual void startDisplayListWrite(uint32_t offset,
+                                       const uint32_t* words,
+                                       uint32_t count) override;
+    virtual bool isDisplayListWriteDone() override;
     virtual void swapDisplayList() override;
     virtual bool isDisplayListSwapPending() override;
 

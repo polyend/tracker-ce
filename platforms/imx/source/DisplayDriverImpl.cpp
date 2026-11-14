@@ -227,6 +227,27 @@ void DisplayDriverImpl::writeDisplayList(uint32_t offset, const uint32_t* words,
     MCU_CShigh();
 }
 
+void DisplayDriverImpl::startDisplayListWrite(uint32_t offset,
+                                             const uint32_t* words,
+                                             uint32_t count)
+{
+    MCU_CSlow();
+    EVE_AddrForWr(RAM_DL + offset);
+    if (spi->startWriteWords(words, count))
+    {
+        // Chip select stays low; MCU_BackgroundWritePoll() raises it.
+        MCU_BackgroundWriteStarted();
+        return;
+    }
+    spi->writeWords(words, count);
+    MCU_CShigh();
+}
+
+bool DisplayDriverImpl::isDisplayListWriteDone()
+{
+    return MCU_BackgroundWritePoll();
+}
+
 void DisplayDriverImpl::swapDisplayList()
 {
     EVE_MemWrite8(REG_DLSWAP, DLSWAP_FRAME);

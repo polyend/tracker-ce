@@ -18,6 +18,13 @@ class SpiBus
     // Sends 32-bit words, least significant byte first, without reading
     // anything back. Blocks until the last bit is out.
     void writeWords(const uint32_t* data, uint32_t count);
+    // The same by DMA: returns at once, the words go out in the background.
+    // `data` must stay unchanged until isWriteDone() returns true, and the
+    // bus must not be used for anything else. Returns false without sending
+    // if the transfer cannot be done this way.
+    bool startWriteWords(const uint32_t* data, uint32_t count);
+    bool isWriteDone();
+    uint32_t writeFailures = 0;
 
     int transferDmaBuff();
 
@@ -33,6 +40,11 @@ class SpiBus
 
     void start();
     void waitForFifoSpace(uint32_t fifoSize);
+    void waitUntilIdle();
+
+    bool writeInBackground = false;
+    uint32_t writeSavedTcr = 0;
+    uint32_t writeSavedFcr = 0;
 };
 
 extern SpiBus spiBus4;
