@@ -83,6 +83,7 @@ void cFileManager::update()
         case fmCopyInstrumentsInWorkspace: instrumentCopy.update(); break;
         case fmPreviewSamplesFromSD: break;
         case fmDeleteInstruments: instrumentDelete.update(); break;
+        case fmMoveInstrumentsInWorkspace: instrumentMove.update(); break;
 
         case fmLoadWorkspacePattern: updateLoadWorkspacePattern(); break;
 
@@ -139,6 +140,7 @@ uint8_t cFileManager::getProgress()
         }
         case fmImportingSamplesToWorkspace: return sampleImport.getProgress() * 100;
         case fmCopyingInstrumentsInWorkspace: return instrumentCopy.getProgress() * 100;
+        case fmMovingInstruments: return instrumentMove.getProgress() * 100;
         case fmExportingProjectSamples:
             actualMemoryTransfered = getTotalSamplesMemoryExported();
             break;
@@ -318,6 +320,13 @@ bool cFileManager::deleteInstruments(uint8_t instrumentSlotFrom, uint8_t instrum
     stopAutosave();
 
     return instrumentDelete.deleteInstruments(instrumentSlotFrom, instrumentSlotTo);
+}
+
+bool cFileManager::reorderInstrumentsInWorkspace(const uint8_t* order, bool updatePatterns)
+{
+    stopAutosave();
+
+    return instrumentMove.reorderInstruments(order, updatePatterns);
 }
 
 // Called from the sequencer tick, which runs in the audio callback and must not use the SD

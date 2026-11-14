@@ -13,6 +13,7 @@
 
 #include "InstrumentCopy.h"
 #include "InstrumentDelete.h"
+#include "InstrumentMove.h"
 #include "ProjectOpen.h"
 #include "ProjectSave.h"
 #include "RecordingSave.h"
@@ -62,6 +63,7 @@ enum fileManagerStatus
     fmImportingSampleFromSampleEditor,
     fmReloadingSamples,
     fmDrawingSampleWaveform,
+    fmMovingInstruments,
 
     fmLoadEnd,
     fmSaveEnd,
@@ -78,6 +80,7 @@ enum fileManagerStatus
     fmImportSampleFromSampleEditorEnd,
     fmReloadSamplesEnd,
     fmDrawingSampleWaveformEnd,
+    fmMoveInstrumentsEnd,
 
     fmError,
     fmLoadError,
@@ -97,6 +100,7 @@ enum fileManagerStatus
     fmImportSampleFromSampleEditorError,
     fmReloadSamplesError,
     fmDrawingSampleWaveformError,
+    fmMoveInstrumentsError,
 
 };
 
@@ -133,6 +137,8 @@ enum fileManagerOperation
     fmReloadSamples,
 
     fmDrawSampleWaveform,
+
+    fmMoveInstrumentsInWorkspace,
 };
 
 enum enImportModMode
@@ -262,6 +268,21 @@ class cFileManager
     bool stopPrevievSamplefromSD();
 
     bool deleteInstruments(uint8_t instrumentSlotFrom, uint8_t instrumentSlotTo);
+
+    // Puts the sample slots in a new order in one operation: order[newSlot] = oldSlot, a
+    // permutation of all sample slots. With updatePatterns set, every pattern step pointing
+    // at a moved sample is rewritten to follow it; otherwise patterns keep their slot numbers
+    // and play whatever lands there.
+    bool reorderInstrumentsInWorkspace(const uint8_t* order, bool updatePatterns);
+
+    // remap[i] is the new slot number of sample instrument i (identity for unaffected slots).
+    // Returns true if any step changed.
+    static bool remapPatternInstruments(Sequencer::strPattern* pattern, const uint8_t* remap);
+    // Rewrites one workspace pattern file. Returns false only on a read/write failure.
+    bool remapWorkspacePatternInstruments(uint8_t patternIdx, const uint8_t* remap);
+    // Rewrites the patterns held in RAM: the sequencer buffers, performance buffer and undo.
+    void remapLoadedPatternsInstruments(const uint8_t* remap);
+    void remapUndoPatternsInstruments(const uint8_t* remap);
 
     void loadWorkspacePattern(uint8_t index);
     const Sequencer::strPattern* loadWorkspacePatternToTempBuffer(uint8_t index);
@@ -454,6 +475,7 @@ class cFileManager
     ProjectSave projectSave;
     InstrumentCopy instrumentCopy;
     InstrumentDelete instrumentDelete;
+    InstrumentMove instrumentMove;
     SampleMemoryReload sampleMemoryReload;
     SampleMemorySave sampleMemorySave;
     RecordingSave recordingSave;

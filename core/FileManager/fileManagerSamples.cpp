@@ -68,6 +68,8 @@ bool cFileManager::saveSampleDataToWorkspace(int idx)
                     saveInstrumentStructToWorkspace(idx);
                 }
 
+                bool copied = false;
+
                 auto [srcOpen, srcHandle] =
                   fileSystem->openFile(srcPath, FileSystem::FileOpenMode::kRead);
                 if (srcOpen)
@@ -98,26 +100,42 @@ bool cFileManager::saveSampleDataToWorkspace(int idx)
                             remaining -= static_cast<uint32_t>(bytesRead);
                         }
                         fileSystem->closeFile(dstHandle);
+
+                        copied = (remaining == 0);
                     }
                     fileSystem->closeFile(srcHandle);
-
-                    if (mtProject.sampleMemory[idx].hasWaveformPeaks &&
-                        mtProject.sampleMemory[idx].preCacheFrames > 0)
-                    {
-                        voiceStreamManager.rebindInstrumentStreamFile(
-                          idx, currentCopyDestPath, sizeof(strInstrumentFile));
-                    }
-                    else
-                    {
-                        voiceStreamManager.setupInstrumentStream(
-                          idx,
-                          currentCopyDestPath,
-                          sizeof(strInstrumentFile),
-                          mtProject.instrument[idx].sample.length,
-                          isInstrumentStereo(idx));
-                    }
-                    return true;
                 }
+
+                if (!copied)
+                {
+                    // A short copy (SD card full, read error) must not leave a workspace file
+                    // that looks complete: project save treats any workspace .pti larger than a
+                    // header as the sample's data and replaces the project copy with it. Put
+                    // the header-only file back and keep streaming from the source.
+                    fileSystem->remove(currentCopyDestPath);
+                    changesFlags.instrument[idx] = 1;
+                    saveInstrumentStructToWorkspace(idx);
+
+                    stopOperationWithError(fmSaveError);
+                    return false;
+                }
+
+                if (mtProject.sampleMemory[idx].hasWaveformPeaks &&
+                    mtProject.sampleMemory[idx].preCacheFrames > 0)
+                {
+                    voiceStreamManager.rebindInstrumentStreamFile(
+                      idx, currentCopyDestPath, sizeof(strInstrumentFile));
+                }
+                else
+                {
+                    voiceStreamManager.setupInstrumentStream(
+                      idx,
+                      currentCopyDestPath,
+                      sizeof(strInstrumentFile),
+                      mtProject.instrument[idx].sample.length,
+                      isInstrumentStereo(idx));
+                }
+                return true;
             }
         }
         return true;

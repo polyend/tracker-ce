@@ -1,6 +1,8 @@
 #include "VoiceStreamManager.h"
+
 #include "cr_section_macros.h"
 #include "log.h"
+#include <algorithm>
 #include <string.h>
 
 extern strMtProject mtProject;
@@ -181,6 +183,35 @@ void VoiceStreamManager::copyInstrumentMetadata(int srcInstrIdx, int dstInstrIdx
     dstMem.databaseSector = srcMem.databaseSector;
     dstMem.sectorsPerCluster = srcMem.sectorsPerCluster;
     dstMem.sampleHash = srcMem.sampleHash;
+}
+
+void VoiceStreamManager::swapInstrumentMetadata(int instrIdxA, int instrIdxB)
+{
+    if (instrIdxA < 0 || instrIdxA >= kMaxInstruments || instrIdxB < 0 ||
+        instrIdxB >= kMaxInstruments || instrIdxA == instrIdxB)
+    {
+        return;
+    }
+
+    invalidateInstrumentVoices(instrIdxA);
+    invalidateInstrumentVoices(instrIdxB);
+
+    std::swap_ranges(s_instrumentStreamPaths[instrIdxA],
+                     s_instrumentStreamPaths[instrIdxA] + sizeof(s_instrumentStreamPaths[0]),
+                     s_instrumentStreamPaths[instrIdxB]);
+    std::swap_ranges(s_instrumentClmt[instrIdxA],
+                     s_instrumentClmt[instrIdxA] + kClmtElementCount,
+                     s_instrumentClmt[instrIdxB]);
+    for (int ch = 0; ch < kMaxChannels; ++ch)
+    {
+        std::swap_ranges(s_instrumentWaveformPeaks[instrIdxA][ch],
+                         s_instrumentWaveformPeaks[instrIdxA][ch] + kWaveformPeakPoints,
+                         s_instrumentWaveformPeaks[instrIdxB][ch]);
+    }
+    std::swap_ranges(s_instrumentSliceCache[instrIdxA],
+                     s_instrumentSliceCache[instrIdxA] + MAX_SLICE_NUMBER,
+                     s_instrumentSliceCache[instrIdxB]);
+    std::swap(s_instrumentSliceCacheValid[instrIdxA], s_instrumentSliceCacheValid[instrIdxB]);
 }
 
 void VoiceStreamManager::buildWaveformPeaksFromRam(int instrIdx,

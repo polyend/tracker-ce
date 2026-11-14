@@ -268,3 +268,16 @@ void cFileManager::redoPattern()
         setActualPatternStructChanged();
     }
 }
+
+void cFileManager::remapUndoPatternsInstruments(const uint8_t* remap)
+{
+    // without this an undo after a sample move would bring back the old slot numbers
+    for (uint8_t i = 0; i < UNDO_CAPACITY; i++)
+    {
+        remapPatternInstruments(&undoPatternBuffer[i], remap);
+    }
+    for (uint8_t i = 0; i < UNDO_SONG_CAPACITY; i++)
+    {
+        remapPatternInstruments(&undoSongBuffer[i], remap);
+    }
+}

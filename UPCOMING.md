@@ -46,6 +46,11 @@
 	* With `ENABLE_DEV_CONSOLE`, a CPU fault (hard, memory-management, bus or usage fault) is reported on the console as `@fault pc=... lr=...` plus a rough call chain, instead of freezing the device silently.
 	* See [`docs/developer_guide.md`](docs/developer_guide.md) for usage details.
 
+7. **Reorder Samples in Sample Loader (All 3 Devices)**
+	* Pressing **`[Rec]`** on the Sample Loader screen toggles an **Arrange** set of actions: **`Move up`** and **`Move down`** move the highlighted instrument (or `[Shift]`-selected block of instruments) one slot up or down the list. The sample in the target slot swaps into the slot that was freed.
+	* Moves are queued: the list shows the new order straight away (moved slots are marked with `*`) and nothing is changed until you press **`Apply`**, which performs all of them in one operation. **`Cancel`** discards the queued moves. Leaving the Sample Loader also discards them.
+	* **`Apply`** asks whether to update patterns: **`Update`** rewrites every pattern step, including undo history, so it keeps playing the same sample after the move. **`Skip`** keeps the slot numbers in patterns, so they play whatever sample now occupies those slots. **`Cancel`** returns to arranging with the queued moves intact.
+
 ### Changed & Fixed
 
 * **`CHIP` Synth Engine Performance Overhaul (Tracker+ & Tracker Mini)**:

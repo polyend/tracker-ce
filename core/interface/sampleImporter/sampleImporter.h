@@ -62,7 +62,8 @@ class cSampleImporter : public ModuleBase
         instrCopy,
         instrAdd,
         instrAddNext,
-        instrDelete
+        instrDelete,
+        instrApplyArrange
     } stopPatternAction;
 
     strList explorerList;
@@ -115,6 +116,34 @@ class cSampleImporter : public ModuleBase
     void showRename();
 
     void addNextColorControl();
+
+    // arrange mode - toggled with Rec, swaps the bottom actions for slot reordering. Moves
+    // are queued in arrangeOrder and only touch the samples when applied.
+    bool arrangeMode = false;
+    bool arrangeUpdatePatterns = true;             // answer to the popup shown by Apply
+    bool arrangePending = false;                   // queued moves not applied yet
+    bool arrangeApplying = false;                  // apply operation running
+    uint8_t arrangeOrder[kSampleInstrumentsCount]; // arrangeOrder[shownSlot] = actual slot
+
+    // the actual slot of the sample shown in list row 'slot'
+    uint8_t arrangeSource(uint8_t slot) const
+    {
+        return (arrangePending && slot < kSampleInstrumentsCount) ? arrangeOrder[slot] : slot;
+    }
+
+    void toggleArrangeMode();
+    void setArrangeScreenFunct();
+    void showArrangeLabels();
+    void arrangeColorControl();
+    void resetArrangeOrder();
+    void moveSelectedInstruments(int8_t direction);
+    void applyArrange();
+    void showUpdatePatternsPopup();
+    void closeUpdatePatternsPopup();
+    void startArrangeApply();
+    void cancelArrange();
+    void finishArrangeApply(bool success);
+    void refreshAfterArrangeChange();
 
     // copy paste
     void copyInstruments();

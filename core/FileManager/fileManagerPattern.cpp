@@ -675,3 +675,77 @@ uint32_t cFileManager::calcProjectPatternsSize()
 
     return size;
 }
+
+//------------------------------------------------------------------------------------------------------------------
+//-----------------------------------------     INSTRUMENT REMAP
+//------------------------------------------------------------------------------------------------------------------
+
+bool cFileManager::remapPatternInstruments(Sequencer::strPattern* pattern, const uint8_t* remap)
+{
+    bool changed = false;
+
+    for (int trackIdx = 0; trackIdx < kAllTracks; trackIdx++)
+    {
+        // whole step table, not only up to track length - hidden steps come back when the
+        // track gets longer
+        for (int stepIdx = 0; stepIdx <= Sequencer::MAXSTEP; stepIdx++)
+        {
+            Sequencer::strPattern::strTrack::strStep& step = pattern->track[trackIdx].step[stepIdx];
+
+            if (step.note == Sequencer::STEP_NOTE_EMPTY ||
+                step.instrument >= kSampleInstrumentsCount)
+            {
+                continue;
+            }
+
+            uint8_t newInstrument = remap[step.instrument];
+            if (newInstrument != step.instrument)
+            {
+                step.instrument = newInstrument;
+                changed = true;
+            }
+        }
+    }
+
+    return changed;
+}
+
+bool cFileManager::remapWorkspacePatternInstruments(uint8_t patternIdx, const uint8_t* remap)
+{
+    if (isPatternEmpty(patternIdx))
+    {
+        return true;
+    }
+
+    char patternPath[PATCH_SIZE]{ 0 };
+    snprintf(patternPath, PATCH_SIZE, cWorkspacePatternFileFormat, patternIdx);
+
+    Sequencer::strPattern* pattern =
+      const_cast<Sequencer::strPattern*>(loadWorkspacePatternToTempBuffer(patternIdx));
+
+    if (pattern == nullptr)
+    {
+        report("remap pattern - load failed ", patternPath);
+        return false;
+    }
+
+    if (!remapPatternInstruments(pattern, remap))
+    {
+        return true;
+    }
+
+    return writePatternFile(patternPath, pattern);
+}
+
+void cFileManager::remapLoadedPatternsInstruments(const uint8_t* remap)
+{
+    if (remapPatternInstruments(sequencer.getActualPattern(), remap))
+    {
+        setActualPatternStructChanged();
+    }
+
+    remapPatternInstruments(sequencer.getBuffPattern(), remap);
+    remapPatternInstruments(&fileManagerPerformancePatternBuffer, remap);
+
+    remapUndoPatternsInstruments(remap);
+}
