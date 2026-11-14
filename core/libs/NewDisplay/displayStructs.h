@@ -179,7 +179,9 @@ struct strControlProperties
 
 struct strFont
 {
-    uint8_t data[148];
+    // The start of the font's metric block. Only 148 bytes are metrics; see
+    // displayList::kFontMetricsSize for why more are kept.
+    uint8_t data[256];
     uint32_t size;
     int16_t handle;
     uint32_t address;
