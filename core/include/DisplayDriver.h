@@ -36,6 +36,14 @@ class DisplayDriver
     virtual bool updateStreamDma(bool lastFrame) = 0;
     virtual void stopStreamDma() = 0;
 
+    // Direct access to the chip's display-list memory, bypassing the
+    // coprocessor. `offset` is in bytes from the start of the list. A swap
+    // takes effect at the next frame of the panel; until then the list memory
+    // must not be written.
+    virtual void writeDisplayList(uint32_t offset, const uint32_t* words, uint32_t count) = 0;
+    virtual void swapDisplayList() = 0;
+    virtual bool isDisplayListSwapPending() = 0;
+
   protected:
     void startCoProList()
     {

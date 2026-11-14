@@ -291,3 +291,25 @@ void dataTransferComplite()
 
     DisplayDriverImpl::setUpdateDmaStep(2);
 }
+
+//========================================================================================================
+void DisplayDriverImpl::writeDisplayList(uint32_t offset, const uint32_t* words, uint32_t count)
+{
+    MCU_CSlow();
+    EVE_AddrForWr(RAM_DL + offset);
+    for (uint32_t i = 0; i < count; i++)
+    {
+        EVE_Write32(words[i]);
+    }
+    MCU_CShigh();
+}
+
+void DisplayDriverImpl::swapDisplayList()
+{
+    EVE_MemWrite8(REG_DLSWAP, DLSWAP_FRAME);
+}
+
+bool DisplayDriverImpl::isDisplayListSwapPending()
+{
+    return EVE_MemRead8(REG_DLSWAP) != 0;
+}

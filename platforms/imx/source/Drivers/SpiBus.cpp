@@ -13,6 +13,7 @@
 
 SpiBus spiBus4;
 
+
 //--------------------------------------   DMA   -------------------------------------------
 
 typedef void (*lpspi_master_edma_transfer_callback_t)(LPSPI_Type* base,
@@ -123,6 +124,56 @@ uint32_t SpiBus::transfer4Bytes(uint32_t data)
     }
 
     return 0;
+}
+
+void SpiBus::writeWords(const uint32_t* data, uint32_t count)
+{
+    assert(spiBase != nullptr);
+    // The largest frame the peripheral can send, in 32-bit words.
+    constexpr uint32_t kWordsPerFrame = 128;
+
+    while ((spiBase->FSR & LPSPI_FSR_TXCOUNT_MASK) != 0U || (spiBase->SR & LPSPI_SR_MBF_MASK) != 0U)
+    {
+    }
+
+    const uint32_t fifoSize = 1UL << ((spiBase->PARAM & LPSPI_PARAM_TXFIFO_MASK) >>
+                                      LPSPI_PARAM_TXFIFO_SHIFT);
+    const uint32_t byteFrames = spiBase->TCR;
+    // The peripheral pauses between frames, so the words go out in frames of
+    // up to 128 instead of four 8-bit frames each. The receiver is masked:
+    // nothing has to be drained and the FIFO can be kept full. A frame's
+    // settings travel through the same FIFO as its data.
+    const uint32_t wordFrames = (byteFrames & ~LPSPI_TCR_FRAMESZ_MASK) | LPSPI_TCR_BYSW_MASK |
+                                LPSPI_TCR_RXMSK_MASK;
+
+    while (count > 0)
+    {
+        const uint32_t words = count < kWordsPerFrame ? count : kWordsPerFrame;
+        waitForFifoSpace(fifoSize);
+        spiBase->TCR = wordFrames | LPSPI_TCR_FRAMESZ(words * 32 - 1);
+        for (uint32_t i = 0; i < words; i++)
+        {
+            waitForFifoSpace(fifoSize);
+            spiBase->TDR = data[i];
+        }
+        data += words;
+        count -= words;
+    }
+
+    while ((spiBase->FSR & LPSPI_FSR_TXCOUNT_MASK) != 0U || (spiBase->SR & LPSPI_SR_MBF_MASK) != 0U)
+    {
+    }
+    spiBase->TCR = byteFrames;
+    while ((spiBase->FSR & LPSPI_FSR_TXCOUNT_MASK) != 0U)
+    {
+    }
+}
+
+void SpiBus::waitForFifoSpace(uint32_t fifoSize)
+{
+    while (((spiBase->FSR & LPSPI_FSR_TXCOUNT_MASK) >> LPSPI_FSR_TXCOUNT_SHIFT) >= fifoSize)
+    {
+    }
 }
 
 void SpiBus::init(LPSPI_Type* spiBase, int pcs, int cpha)

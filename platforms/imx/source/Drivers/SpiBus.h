@@ -15,6 +15,9 @@ class SpiBus
     void setSpeed(uint32_t baudRate);
     uint8_t transferByte(uint8_t data, int pcs = 0, bool pcsContinous = true);
     uint32_t transfer4Bytes(uint32_t data);
+    // Sends 32-bit words, least significant byte first, without reading
+    // anything back. Blocks until the last bit is out.
+    void writeWords(const uint32_t* data, uint32_t count);
 
     int transferDmaBuff();
 
@@ -29,6 +32,7 @@ class SpiBus
     lpspi_clock_phase_t cpha;
 
     void start();
+    void waitForFifoSpace(uint32_t fifoSize);
 };
 
 extern SpiBus spiBus4;
