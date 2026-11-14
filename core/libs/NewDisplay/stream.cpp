@@ -65,12 +65,17 @@ void cDisplay::updateVideoStream(bool lastFrame)
 
 bool cDisplay::showVideoStreamFrame()
 {
-    if (!displayDriver->isCoProEmpty())
-        return false;
+    // Not while the last frame is still waiting to be shown.
+    if (swapInFlight)
+    {
+        if (displayDriver->isDisplayListSwapPending())
+        {
+            return false;
+        }
+        swapInFlight = false;
+    }
 
-    displayDriver->beginCoProListNoCheck();
-
-    API_CMD_DLSTART();
+    beginScreen();
 
     API_CLEAR_COLOR(0x000000);
     API_CLEAR(1, 1, 1);
@@ -128,10 +133,7 @@ bool cDisplay::showVideoStreamFrame()
     API_VERTEX2F(screen_x, screen_y);
     API_END();
 
-    API_DISPLAY();
-    API_CMD_SWAP();
-
-    displayDriver->endCoProList();
+    showScreen();
 
     return true;
 }

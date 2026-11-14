@@ -336,13 +336,6 @@ cDisplay::cDisplay()
 
 void cDisplay::loadFont(const CompressedFontData* fontsData, uint8_t fontCount)
 {
-    displayDriver->beginCoProList();
-    API_CMD_DLSTART();
-    API_CLEAR_COLOR(0x000000);
-    API_CLEAR(1, 1, 1);
-    API_DISPLAY();
-    displayDriver->endCoProList();
-
     uint16_t char_num;
     for (uint8_t i = 0; i < fontCount; i++)
     {
@@ -375,30 +368,99 @@ void cDisplay::loadFont(const CompressedFontData* fontsData, uint8_t fontCount)
         displayDriver->writeFontRAMG(decompressedFontData, fonts[i].size, fonts[i].address);
     }
 
-    displayDriver->beginCoProList();
-    API_CMD_DLSTART();
+    bindFonts();
+}
+
+// Points the bitmap handles of the fonts at their glyphs. The chip keeps
+// what a displayed list sets for a handle, so one blank frame does it.
+void cDisplay::bindFonts()
+{
+    beginScreen();
 
     API_CLEAR_COLOR(0x000000);
     API_CLEAR(1, 1, 1);
 
-    uint8_t first_char;
     for (uint8_t i = 0; i < displayFontCount; i++)
     {
-        first_char = 0;
+        uint8_t firstCharacter = 0;
+        while (!fonts[i].data[firstCharacter] && firstCharacter < 127)
+        {
+            firstCharacter++;
+        }
 
-        while (!fonts[i].data[first_char])
-            first_char++;
-
+        // The same words as the coprocessor's CMD_SETFONT2 writes: the
+        // source is moved back by the glyphs the font leaves out at its
+        // start, so that a cell number is a character code.
+        const int32_t source =
+          fonts[i].source - firstCharacter * fonts[i].linestride * fonts[i].height;
         API_BITMAP_HANDLE(fonts[i].handle);
-        API_BITMAP_SOURCE(fonts[i].source);
-        API_BITMAP_LAYOUT(L4, fonts[i].linestride, fonts[i].height);
+        API_BITMAP_SOURCE((uint32_t)source);
+        API_BITMAP_LAYOUT_H(0, 0);
+        API_BITMAP_LAYOUT(fonts[i].format, fonts[i].linestride, fonts[i].height);
+        API_BITMAP_SIZE_H(0, 0);
         API_BITMAP_SIZE(NEAREST, BORDER, BORDER, fonts[i].width, fonts[i].height);
-        API_CMD_SETFONT2(fonts[i].handle, fonts[i].address, first_char);
     }
 
-    API_DISPLAY();
-    API_CMD_SWAP();
-    displayDriver->endCoProList();
+    showScreen();
+}
+
+void cDisplay::beginScreen()
+{
+    while (!displayDriver->isDisplayListWriteDone())
+    {
+    }
+    if (uploadSwaps)
+    {
+        // A frame of the controls was on its way. Part of it may have
+        // reached the chip, so what its list holds is no longer known.
+        uploadSwaps = false;
+        uploadRun = uploadRunCount;
+        forgetChipLists();
+        composePending = true;
+    }
+    displayList::capture(frameWords, kFrameWords - 1);
+}
+
+void cDisplay::showScreen()
+{
+    uint32_t count = displayList::finish();
+    frameWords[count++] = FT_DISPLAY();
+    composedWords = count;
+
+    waitForChip();
+    displayDriver->writeDisplayList(0, frameWords, count);
+    memcpy(chipLists[backList], frameWords, count * 4);
+    if (count > chipListWords[backList])
+    {
+        chipListWords[backList] = count;
+    }
+    displayDriver->swapDisplayList();
+    swapInFlight = true;
+    swapPolledAt = timer->millis();
+    backList ^= 1;
+}
+
+// Blocks until the list memory may be written: the coprocessor is done with
+// any list of its own and the last swap has happened.
+void cDisplay::waitForChip()
+{
+    // A swap happens at the panel's next frame. With the panel switched off
+    // there is none; do not hang then.
+    constexpr uint32_t kSwapTimeoutMs = 100;
+
+    if (displayList::coprocessorDrew)
+    {
+        displayDriver->awaitCoProEmpty();
+        displayList::coprocessorDrew = false;
+        forgetChipLists();
+        swapInFlight = true;
+    }
+    const uint32_t startedMs = timer->millis();
+    while (swapInFlight && displayDriver->isDisplayListSwapPending() &&
+           timer->millis() - startedMs < kSwapTimeoutMs)
+    {
+    }
+    swapInFlight = false;
 }
 
 void cDisplay::begin(DisplayDriver* displayDriver, Timer* timer)
@@ -423,10 +485,7 @@ void cDisplay::begin(DisplayDriver* displayDriver, Timer* timer)
 
     // ####################################
 
-    // displayDriver->beginCoProListNoCheck();
-    displayDriver->beginCoProList();
-
-    API_CMD_DLSTART();
+    beginScreen();
 
     API_CLEAR_COLOR(0x000000);
     API_CLEAR(1, 1, 1);
@@ -450,11 +509,7 @@ void cDisplay::begin(DisplayDriver* displayDriver, Timer* timer)
 
     API_RESTORE_CONTEXT();
 
-    API_DISPLAY();
-    API_CMD_SWAP();
-
-    displayDriver->endCoProList();
-    displayDriver->awaitCoProEmpty();
+    showScreen();
 
     refreshQueueTop = 0;
     refreshQueueBott = 0;
@@ -1204,17 +1259,7 @@ void cDisplay::processDisplayUpdateImmediate()
     {
         return;
     }
-    if (displayList::coprocessorDrew)
-    {
-        displayDriver->awaitCoProEmpty();
-        displayList::coprocessorDrew = false;
-        forgetChipLists();
-        swapInFlight = true;
-    }
-    while (swapInFlight && displayDriver->isDisplayListSwapPending())
-    {
-    }
-    swapInFlight = false;
+    waitForChip();
     renderFrame(UINT32_MAX, kFrameWords);
     while (uploadSwaps)
     {
@@ -1340,17 +1385,12 @@ void cDisplay::hideAllControls()
 
 void cDisplay::clear()
 {
-    displayDriver->beginCoProList();
-
-    API_CMD_DLSTART();
+    beginScreen();
 
     API_CLEAR_COLOR(0x000000);
     API_CLEAR(1, 1, 1);
 
-    API_DISPLAY();
-    API_CMD_SWAP();
-
-    displayDriver->endCoProList();
+    showScreen();
 }
 //=====================================================================================================
 // debug
@@ -1525,13 +1565,6 @@ bool cDisplay::loadCustomFontFromSD(FileSystem* fs, const char* fontFilePath)
         return false;
     }
 
-    displayDriver->beginCoProList();
-    API_CMD_DLSTART();
-    API_CLEAR_COLOR(0x000000);
-    API_CLEAR(1, 1, 1);
-    API_DISPLAY();
-    displayDriver->endCoProList();
-
     for (uint8_t i = 0; i < displayFontCount; i++)
     {
         if (entries[i].size > kMaxFontBufferSize)
@@ -1580,30 +1613,7 @@ bool cDisplay::loadCustomFontFromSD(FileSystem* fs, const char* fontFilePath)
 
     fs->closeFile(file);
 
-    displayDriver->beginCoProList();
-    API_CMD_DLSTART();
-
-    API_CLEAR_COLOR(0x000000);
-    API_CLEAR(1, 1, 1);
-
-    uint8_t first_char;
-    for (uint8_t i = 0; i < displayFontCount; i++)
-    {
-        first_char = 0;
-
-        while (!fonts[i].data[first_char] && first_char < 127)
-            first_char++;
-
-        API_BITMAP_HANDLE(fonts[i].handle);
-        API_BITMAP_SOURCE(fonts[i].source);
-        API_BITMAP_LAYOUT(L4, fonts[i].linestride, fonts[i].height);
-        API_BITMAP_SIZE(NEAREST, BORDER, BORDER, fonts[i].width, fonts[i].height);
-        API_CMD_SETFONT2(fonts[i].handle, fonts[i].address, first_char);
-    }
-
-    API_DISPLAY();
-    API_CMD_SWAP();
-    displayDriver->endCoProList();
+    bindFonts();
 
     return true;
 }
@@ -1620,9 +1630,7 @@ void cDisplay::setFont(uint8_t index)
 
 void cDisplay::showBatteryScreen(bool empty, bool charging, int8_t level, float voltage)
 {
-    displayDriver->beginCoProList();
-
-    API_CMD_DLSTART();
+    beginScreen();
 
     API_CLEAR_COLOR(0x000000);
     API_CLEAR(1, 1, 1);
@@ -1673,12 +1681,7 @@ void cDisplay::showBatteryScreen(bool empty, bool charging, int8_t level, float 
     API_VERTEX2F(batX + batW + (batH / 6), batY + batH - (batH / 3));
     API_END();
 
-    API_DISPLAY();
-    API_CMD_SWAP();
-
-    displayDriver->endCoProList();
-
-    displayDriver->awaitCoProEmpty();
+    showScreen();
 }
 
 uint8_t* cDisplay::decompressFont(const CompressedFontData* compressedFontData)

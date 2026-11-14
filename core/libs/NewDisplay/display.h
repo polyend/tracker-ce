@@ -168,6 +168,12 @@ class cDisplay
 
     void showBatteryScreen(bool empty, bool charging, int8_t level, float voltage);
 
+    // A frame drawn outside the controls, such as the test screens: the
+    // API_* calls between the two make up the frame, and showScreen() puts
+    // it on screen before it returns.
+    void beginScreen();
+    void showScreen();
+
     DisplayDriver* getDisplayDriver() { return displayDriver; }
     // The frame that was composed last, for checking what reached the chip.
     const uint32_t* composedFrame(uint32_t& words) const;
@@ -185,6 +191,8 @@ class cDisplay
     void continueUpload(uint32_t maxWords);
     void findChangedRuns(uint32_t count);
     void forgetChipLists();
+    void waitForChip();
+    void bindFonts();
     int8_t takeFragment();
     void releaseFragment(cDisplayControl* control);
     static const uint8_t* fontMetrics(uint8_t handle);
