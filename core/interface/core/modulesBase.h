@@ -132,6 +132,9 @@ class InputProcessor
     //----------------------
     void processButtonsInput(uint8_t button, uint8_t state);
     void processPotsInput(uint8_t pot, int16_t value, uint8_t state = 255);
+    // Value of the last processPotsInput() call before the Shift boost curve was applied. It
+    // still includes the encoder driver's own speed-based acceleration.
+    int16_t getLastUnboostedPotValue() const { return lastUnboostedPotValue; }
     void processPadsInput(uint8_t pad, uint8_t state, int16_t velo);
     bool processPowerButton(uint8_t state);
 
@@ -172,6 +175,8 @@ class InputProcessor
     uint8_t potsCleared = 1;
     uint8_t buttonsCleared = 1;
     uint8_t padsCleared = 1;
+
+    int16_t lastUnboostedPotValue = 0;
 };
 
 #endif /* INTERFACE_MODULESBASE_H_ */

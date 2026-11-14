@@ -275,6 +275,8 @@ void InputProcessor::processPotsInput(uint8_t pot, int16_t value, uint8_t state)
         return;
     }
 
+    lastUnboostedPotValue = value;
+
 #ifndef TRACKER_MINI
     if (pots[pot].boost &&
         mtInterface.getPlatform()->getButtons()->isButtonPressed(interfaceButtonShift))

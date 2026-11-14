@@ -115,6 +115,9 @@ static void functMiniMiddle(uint8_t state);
 
 static void functEncoder(int16_t value);
 
+// True while Shift is held and the screen buttons show the track mute page (see functShift).
+static bool shiftMuteButtonsShown = false;
+
 static void functPads(uint8_t pad, uint8_t state, int16_t velo);
 
 static void functMenu(uint8_t state);
@@ -312,6 +315,7 @@ void cPatternEditor::start(uint32_t options)
 
     moduleRefresh = 1;
     patternButtonReleaseActive = 0;
+    shiftMuteButtonsShown = false;
 
     undoRedoButtonReleaseBlocker = 1;
 
@@ -2030,6 +2034,41 @@ void functEncoder(int16_t value)
 
     if (PTE->editMode == 0)
     {
+        // Shift + jog: move between tracks instead of steps (also while playing, like the arrows).
+        // Uses the value from before Shift's boost curve, so it keeps the encoder driver's
+        // speed-based acceleration exactly like plain step scrolling.
+        if (PTE->buttons->isButtonPressed(interfaceButtonShift))
+        {
+            // Half the acceleration of step scrolling, rounded away from zero so one click is
+            // still one track.
+            const int raw = PTE->ip->getLastUnboostedPotValue();
+            const int tracks = clamp<int>(raw > 0 ? (raw + 1) / 2 : -((1 - raw) / 2), -10, 10);
+            const bool wasMidiTrack = !isSampleTrack(PTE->trackerPattern.actualTrack);
+            PTE->trackerPattern.actualTrack =
+              clamp<int>(PTE->trackerPattern.actualTrack + tracks, 0, kAllTracks - 1);
+            const bool isMidiTrack = !isSampleTrack(PTE->trackerPattern.actualTrack);
+
+            // Crossed the 1-8 / 9-16 boundary: switch the Shift mute buttons to the new page
+            // (functMuteTrack already picks the page from the current track).
+            if (shiftMuteButtonsShown && wasMidiTrack != isMidiTrack)
+            {
+                PTE->showMuteButtons(1, isMidiTrack);
+            }
+
+            if (PTE->isSelectingNow == 1) // konczenie zaznaczania
+            {
+                PTE->isSelectingNow = 0;
+                PTE->trackerPattern.selectColumn = 0;
+                PTE->trackerPattern.selectState = 1;
+            }
+
+            PTE->focusOnActual();
+            PTE->showFxInfo();
+            PTE->lightUpPadBoard();
+            display.refreshControl(PTE->patternControl);
+            return;
+        }
+
         value = interfaceGlobals.invertValForList ? -value : value;
 
         if (!sequencer.isStop())
@@ -2083,6 +2122,11 @@ void functEncoder(int16_t value)
 
 static void functShift(uint8_t state)
 {
+    if (state == buttonPress || state == buttonRelease)
+    {
+        shiftMuteButtonsShown = false; // set again below if this press shows the mute page
+    }
+
     if (PTE->fillState)
     {
         return;
@@ -2108,6 +2152,7 @@ static void functShift(uint8_t state)
             {
                 PTE->showMuteButtons(1, !isSampleTrack(PTE->trackerPattern.actualTrack));
                 PTE->setMuteFunct(1);
+                shiftMuteButtonsShown = true;
             }
         }
     }
