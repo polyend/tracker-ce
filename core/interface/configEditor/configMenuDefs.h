@@ -156,6 +156,8 @@ const char* const limiterModeTexts[2] = {
 
 const char* const sendsModeTexts[2] = { "Pre-fader", "Post-fader" };
 
+const char* const maxTracksTexts[kMaxTracksModeCount] = { "4", "8", "12", "16" };
+
 const char* const numberingModeTexts[3] = {
     "Decimal, Steps from 0",
     "Decimal, Steps from 1",
@@ -321,6 +323,11 @@ const char snapToZeroDesc[] = {
     "cause pops and clicks. To avoid this, activate this mode to automatically snap the markers "
     "when they are set close to the zero amplitude points which are indicated with the green "
     "marker color."
+};
+
+const char maxTracksDesc[] = {
+    "Limits the number of active visible and audible tracks (4, 8, 12, or 16) for a focused or "
+    "retro workflow. All 16 tracks remain preserved internally in the project."
 };
 
 const char hexModeDesc[] = { "Enable the throwback hex goodness: pattern step numbers start with "

@@ -69,6 +69,9 @@
 13. **SD-Card Random Name Wordlists (All 3 Devices)**
 	* Moved the random name generator wordlists to `/Words/adjectives.txt` and `/Words/nouns.txt` on the microSD card (one word per line, with a built-in fallback list when the files are absent; initial files provided in [`sd-card/Words/`](sd-card/Words/)), freeing some Flash space on Original Tracker and letting users customize their own wordlists.
 
+14. **Project Settings — Max Tracks (`4` / `8` / `12` / `16`) (All 3 Devices)**
+	* Added **`Config → Project Settings → Max tracks`** (`4`, `8`, `12`, or `16`, default `16`) stored per-project, enabling a retro 8-track (or focused 4/12-track) workflow across Pattern Editor, Song Editor (with wider columns), Performance Mode, Track Mixer & Limiter Sidechain, Audio Stem Export, and `.it` Export while non-destructively preserving and silencing hidden tracks internally.
+
 ### Changed & Fixed
 
 * **Faster UI Rendering & System Responsiveness (All 3 Devices)**:

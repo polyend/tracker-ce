@@ -1535,6 +1535,38 @@ void Sequencer::stopAllOpenNotes(void)
     liveRecHeldNotesCount = 0;
 }
 
+void Sequencer::onMaxTracksChanged(uint8_t maxTracks)
+{
+    for (int tr = maxTracks; tr < kAllTracks; tr++)
+    {
+        stopOpenNoteOnTrack(tr);
+        player.track[tr].roll.reset();
+        if (player.selectionMode)
+        {
+            player.track[tr].isActive = 0;
+        }
+    }
+
+    liveRecHeldNotesCount = 0;
+
+    if (player.isPlay && player.selectionMode)
+    {
+        bool anyVisibleActive = false;
+        for (int tr = 0; tr < maxTracks; tr++)
+        {
+            if (player.track[tr].isActive != 0)
+            {
+                anyVisibleActive = true;
+                break;
+            }
+        }
+        if (!anyVisibleActive)
+        {
+            stop();
+        }
+    }
+}
+
 void Sequencer::stopOpenNoteOnTrack(int track, bool leaveStepOpen)
 {
     assert(track >= 0);
@@ -2715,9 +2747,11 @@ AUDIO_CORE_FLASH void Sequencer::handleNoteOn(
     }
     else if (isRec())
     {
+        const int maxTracks = getProjectMaxTracks();
         int8_t singleArmedTrack = getSingleArmedTrack();
-        int startTrack = (singleArmedTrack >= 0) ? singleArmedTrack : getActualTrack();
-        int endTrack = (singleArmedTrack >= 0) ? (singleArmedTrack + 1) : kAllTracks;
+        int startTrack = (singleArmedTrack >= 0) ? singleArmedTrack
+                                                 : std::min<int>(getActualTrack(), maxTracks - 1);
+        int endTrack = (singleArmedTrack >= 0) ? (singleArmedTrack + 1) : maxTracks;
 
         if (singleArmedTrack >= 0)
         {
@@ -2875,10 +2909,11 @@ AUDIO_CORE_FLASH void Sequencer::handleNoteOn(
     else // czyli playMode / dogrywanie / wgrywanie akordów w edit
     {
         int instrument = mtProject.values.lastUsedInstrument;
+        const int maxTracks = getProjectMaxTracks();
 
-        for (int tryIdx = 0; tryIdx < kAllTracks; tryIdx++)
+        for (int tryIdx = 0; tryIdx < maxTracks; tryIdx++)
         {
-            int trackIdx = (sel->firstTrack + tryIdx) % kAllTracks;
+            int trackIdx = (sel->firstTrack + tryIdx) % maxTracks;
 
             if (isSampleInstrument(instrument) && !isSampleTrack(trackIdx))
             {
@@ -3117,7 +3152,7 @@ void Sequencer::handleNoteOff(byte channel, // pochodzenie grida np. GRID_OUTSID
                         continue;
                     }
 
-                    if (wasRecOpen && !player.preRecMetronomeActive)
+                    if (tr < getProjectMaxTracks() && wasRecOpen && !player.preRecMetronomeActive)
                     {
                         strPattern::strTrack::strStep* step =
                           &currentPattern->track[tr].step[destinationStep];
@@ -3595,7 +3630,8 @@ void Sequencer::toogleRecArmedOnTrack(uint8_t track)
 int8_t Sequencer::getSingleArmedTrack()
 {
     int8_t armedTrack = -1;
-    for (int tr = 0; tr < kAllTracks; tr++)
+    const int maxTracks = getProjectMaxTracks();
+    for (int tr = 0; tr < maxTracks; tr++)
     {
         if (player.track[tr].isRecordingArmed)
         {
