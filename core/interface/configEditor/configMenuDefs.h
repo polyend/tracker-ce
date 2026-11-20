@@ -378,6 +378,10 @@ const char supportedCcInDesc[] = { "Supported incoming CC\nmessages:\n\nCC41 - C
                                    "mode track),\n\nCC51 - CC62\n(performance mode slot),"
                                    "\n\nCC71 - CC82\n(master mixer levels)." };
 
+const char programChangeInDesc[] = { "Incoming MIDI Program\nChange (0-127) queues\nPattern 1-128 "
+                                     "for the\nnext pattern boundary,\nor switches immediately\nwhen "
+                                     "stopped." };
+
 #ifdef TRACKER_MINI
 
 const char setupFunctionKeysDesc[] = { "" };

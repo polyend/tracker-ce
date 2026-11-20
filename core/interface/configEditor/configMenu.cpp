@@ -197,6 +197,10 @@ const strItemTypeListText notesOutModeSetup{ &mtConfig.midi.notesOutMode, 4, mid
 const strItemTypeListText notesInChanneletup{ &mtConfig.midi.notesInChannel, 17, notesChannel };
 const strItemTypeListText ccInModeSetup{ &mtConfig.midi.ccInMode, 4, midiIn };
 const strItemTypeListText ccInChannelSetup{ &mtConfig.midi.ccInChannel, 17, notesChannel };
+const strItemTypeListText programChangeInModeSetup{ &mtConfig.midi.programChangeInMode, 4, midiIn };
+const strItemTypeListText programChangeInChannelSetup{ &mtConfig.midi.programChangeInChannel,
+                                                       17,
+                                                       notesChannel };
 const strItemTypeListText middleCSetup{ &mtConfig.midi.middleC, 4, middleC };
 const strItemTypeListTextWithAction slaveClockCompSetup{ &mtConfig.midi.slaveClockComp, std::size(slaveClockComp),  slaveClockComp, setSlaveClockCompValue };
 
@@ -225,6 +229,16 @@ cMenuItem melCCInChannel(menuMidi,
                          supportedCcInDesc,
                          menuTypeItemListText,
                          &ccInChannelSetup);
+cMenuItem melProgramChangeInMode(menuMidi,
+                                 "Program Change in",
+                                 programChangeInDesc,
+                                 menuTypeItemListText,
+                                 &programChangeInModeSetup);
+cMenuItem melProgramChangeInChannel(menuMidi,
+                                    "Program Change in ch.",
+                                    programChangeInDesc,
+                                    menuTypeItemListText,
+                                    &programChangeInChannelSetup);
 cMenuItem melMiddleC(menuMidi, "Middle C", nullptr, menuTypeItemListText, &middleCSetup);
 cMenuItem melSlaveClockComp(menuMidi,
                             "Clock sync correction",

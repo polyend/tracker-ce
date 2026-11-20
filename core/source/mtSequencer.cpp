@@ -73,6 +73,7 @@ void Sequencer::init()
 void Sequencer::update()
 {
     reloadPatternAfterStop();
+    processPendingMidiProgramChange();
     updatePatternManagment();
 }
 void Sequencer::initAfterReadConfig()
@@ -1668,6 +1669,77 @@ void Sequencer::reloadPatternAfterStop()
     ENABLE_GLOBAL_INTERRUPTS();
 }
 
+void Sequencer::requestStoppedPatternSwitch(uint8_t patternNumber)
+{
+    player.midiProgramChange_pendingStoppedPattern =
+      clamp<int>(patternNumber, PATTERN_INDEX_MIN, PATTERN_INDEX_MAX);
+}
+
+void Sequencer::processPendingMidiProgramChange()
+{
+    if (player.midiProgramChange_pendingStoppedPattern == 0)
+    {
+        return;
+    }
+
+    if (newFileManager.getStatus() != fmIdle)
+    {
+        return;
+    }
+
+    DISABLE_GLOBAL_INTERRUPTS();
+    uint8_t targetPattern = player.midiProgramChange_pendingStoppedPattern;
+    player.midiProgramChange_pendingStoppedPattern = 0;
+    ENABLE_GLOBAL_INTERRUPTS();
+
+    if (targetPattern == 0)
+    {
+        return;
+    }
+
+    if (isPlay())
+    {
+        sequencialSwitch_queuePattern(targetPattern);
+        return;
+    }
+
+    sequencialSwitch_Reset();
+    setOnGlobalStep(nullCallback);
+
+    if (targetPattern == mtProject.values.actualPattern)
+    {
+        return;
+    }
+
+    if (mtInterface.isPatternScreenActive())
+    {
+        patternEditor.setActualPattern(targetPattern);
+    }
+    else
+    {
+        if (getSeqState() != SEQ_STATE_PLAY_PERFORMANCE)
+        {
+            newFileManager.saveWorkspacePatternNow(mtProject.values.actualPattern);
+        }
+
+        mtProject.values.actualPattern = targetPattern;
+        newFileManager.loadWorkspacePatternNow(mtProject.values.actualPattern);
+
+        DISABLE_GLOBAL_INTERRUPTS();
+        switchRamPatternsNow();
+        ENABLE_GLOBAL_INTERRUPTS();
+
+        if (mtInterface.isPerformanceModeScreenActive())
+        {
+            for (uint8_t a = 0; a < kPerformanceTracks; a++)
+            {
+                mtProject.perfTracksPatterns[a] = mtProject.values.actualPattern;
+            }
+            PM->refreshTrackPattern = 1;
+        }
+    }
+}
+
 void Sequencer::updatePatternManagment()
 {
     static bool last_isPlay = false;
@@ -1963,7 +2035,13 @@ void Sequencer::switchRowStep(uint8_t row) // przełączamy stepy w zależności
             switchRamPatternsNow();
             patternSwitched = true;
 
+            uint16_t pendingPattern = player.sequencialSwitch_pendingPattern;
             sequencialSwitch_Reset();
+            if (pendingPattern > 0)
+            {
+                player.sequencialSwitch_pattern = pendingPattern;
+                player.sequencialSwitch_isArmed = true;
+            }
         }
         else if (player.songMode)
         {
@@ -3535,6 +3613,37 @@ void Sequencer::sequencialSwitch_changeNextPattern(int8_t delta)
       clamp<int>(player.sequencialSwitch_pattern + delta, PATTERN_INDEX_MIN, PATTERN_INDEX_MAX);
 }
 
+void Sequencer::sequencialSwitch_queuePattern(uint8_t patternNumber)
+{
+    uint16_t clampedPattern = clamp<int>(patternNumber, PATTERN_INDEX_MIN, PATTERN_INDEX_MAX);
+
+    DISABLE_GLOBAL_INTERRUPTS();
+    player.midiProgramChange_pendingStoppedPattern = 0;
+    if (player.sequencialSwitch_loaded)
+    {
+        // A pattern is already preloading/preloaded for the imminent end-of-pattern switch.
+        // Defer this new request until immediately after that switch completes.
+        player.sequencialSwitch_pendingPattern = clampedPattern;
+        ENABLE_GLOBAL_INTERRUPTS();
+        return;
+    }
+
+    player.sequencialSwitch_pendingPattern = 0;
+    player.sequencialSwitch_pattern = clampedPattern;
+
+    if (!newFileManager.isPatternLoading() && !isLastPatternStep())
+    {
+        player.sequencialSwitch_isArmed = true;
+        player.onGlobalStep = nullCallback;
+    }
+    else
+    {
+        player.sequencialSwitch_isArmed = false;
+        player.onGlobalStep = cbkSequencialSwitch_SetReady;
+    }
+    ENABLE_GLOBAL_INTERRUPTS();
+}
+
 // uzbraja sequencialSwitch
 void Sequencer::sequencialSwitch_SetReady()
 {
@@ -3561,6 +3670,7 @@ void cbkSequencialSwitch_SetReady()
 AUDIO_CORE_RAM void Sequencer::sequencialSwitch_Reset()
 {
     player.sequencialSwitch_pattern = 0;
+    player.sequencialSwitch_pendingPattern = 0;
     player.sequencialSwitch_isArmed = 0;
     player.sequencialSwitch_loaded = 0;
 }
