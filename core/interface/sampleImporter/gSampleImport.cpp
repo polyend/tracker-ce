@@ -194,6 +194,11 @@ void cSampleImporter::showDefaultScreen()
     display.setControlValue(label[3], 0);
     display.setControlValue(label[4], 0);
 
+    if (arrangeMode)
+    {
+        showArrangeLabels();
+    }
+
     updateMemoryButtonLabel();
 
     display.setControlValue(bgLabel, 255); // 0b11111111
@@ -479,6 +484,11 @@ void cSampleImporter::showRename()
 
 void cSampleImporter::showAddOrEnter(bool isShiftPressed)
 {
+    if (arrangeMode)
+    {
+        return;
+    }
+
     if (isFolderRow(selectedFile))
     {
         display.setControlText(label[0], "Enter");
@@ -545,7 +555,7 @@ void cSampleImporter::previewColorControl()
     }
     else
     {
-        if (mtProject.instrument[selectedSlot].isActive != 1)
+        if (mtProject.instrument[arrangeSource(selectedSlot)].isActive != 1)
         {
             colors = display.getTheme().inactiveButtonLabelsColors;
         }
@@ -1007,17 +1017,19 @@ void cSampleImporter::showImportApplyButtonStyle()
 
 void cSampleImporter::updateMemoryButtonLabel()
 {
-    if (selectedPlace == 1 && selectedSlot < kSampleInstrumentsCount &&
-        mtProject.instrument[selectedSlot].isActive)
+    const uint8_t slot = arrangeSource(selectedSlot);
+
+    if (selectedPlace == 1 && slot < kSampleInstrumentsCount && mtProject.instrument[slot].isActive)
     {
-        bool streamed = mtProject.sampleMemory[selectedSlot].isStreamed;
-        bool canStream = (mtProject.instrument[selectedSlot].sample.length > kStreamPreCacheFrames) &&
-                         isPlayModeStreamable(mtProject.instrument[selectedSlot].playMode);
+        bool streamed = mtProject.sampleMemory[slot].isStreamed;
+        bool canStream = (mtProject.instrument[slot].sample.length > kStreamPreCacheFrames) &&
+                         isPlayModeStreamable(mtProject.instrument[slot].playMode);
+        // the mode can't be switched while moves are queued
+        bool canToggle = (streamed || canStream) && !arrangePending;
         display.setControlText(label[7], streamed ? "Mode: [S]" : "Mode: RAM");
-        display.setControlColors(
-          label[7],
-          (streamed || canStream) ? display.getTheme().activeButtonLabelsColors
-                                  : display.getTheme().inactiveButtonLabelsColors);
+        display.setControlColors(label[7],
+                                 canToggle ? display.getTheme().activeButtonLabelsColors
+                                           : display.getTheme().inactiveButtonLabelsColors);
     }
     else
     {
@@ -1034,4 +1046,98 @@ void cSampleImporter::updateMemoryButtonLabel()
         display.setControlColors(label[7], display.getTheme().activeButtonLabelsColors);
     }
     display.refreshControl(label[7]);
+}
+
+//==============================================================================================================
+void cSampleImporter::showArrangeLabels()
+{
+    titleBar->setTitle(arrangeMode ? "Sample Loader - Arrange" : "Sample Loader");
+
+    display.setControlText(label[0], "Move up");
+    display.setControlText2(label[0], "");
+    display.setControlValue(label[0], 0);
+
+    display.setControlText(label[1], "Move down");
+    display.setControlText2(label[1], "");
+    display.setControlValue(label[1], 0);
+
+    display.setControlText(label[3], "");
+    display.setControlText2(label[3], "");
+    display.setControlValue(label[3], 0);
+
+    display.setControlText(label[4], "Cancel");
+    display.setControlText2(label[4], "");
+    display.setControlValue(label[4], 0);
+
+    display.setControlText(label[5], "Apply");
+    display.setControlText2(label[5], "");
+    display.setControlValue(label[5], 0);
+
+    arrangeColorControl();
+}
+
+void cSampleImporter::showUpdatePatternsPopup()
+{
+    mtPopups.showInfoPopup("Update patterns to follow the moved samples?",
+                           "Skip keeps patterns on the same slot numbers.");
+
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        display.setControlStyle(label[i],
+                                (controlStyleCenterX | controlStyleCenterY | controlStyleFont3));
+        display.setControlStyle2(label[i],
+                                 (controlStyleCenterX | controlStyleCenterY | controlStyleFont2));
+        display.setControlPosition(label[i], (800 / 8) * i + (800 / 16), 424);
+        display.setControlSize(label[i], 800 / 8 - 6, 55);
+        display.setControlText(label[i], "");
+        display.setControlText2(label[i], "");
+        display.setControlValue(label[i], 0);
+    }
+
+    const char* const texts[] = { "Cancel", "Skip", "Update" };
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        uint8_t idx = 5 + i;
+        display.setControlText(label[idx], texts[i]);
+        display.setControlShow(label[idx]);
+        display.setControlColors(label[idx], display.getTheme().highlightedButtonLabelsColors);
+        display.setAddControlStyle(label[idx], controlStyleBackground);
+    }
+
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        display.refreshControl(label[i]);
+    }
+
+    display.setControlValue(bgLabel, 255);
+    display.refreshControl(bgLabel);
+
+    display.synchronizeRefresh();
+}
+
+void cSampleImporter::arrangeColorControl()
+{
+    const uint32_t* inactive = display.getTheme().inactiveButtonLabelsColors;
+    const uint32_t* active = display.getTheme().activeButtonLabelsColors;
+
+    bool canMoveUp = false;
+    bool canMoveDown = false;
+
+    if (selectedPlace == 1)
+    {
+        canMoveUp = getSelectionStart(listInstruments) > 0;
+        canMoveDown = getSelectionEnd(listInstruments) < kSampleInstrumentsCount - 1;
+    }
+
+    display.setControlColors(label[0], canMoveUp ? active : inactive);
+    display.setControlColors(label[1], canMoveDown ? active : inactive);
+    // Apply and Cancel need queued moves
+    display.setControlColors(label[3], inactive);
+    display.setControlColors(label[4], arrangePending ? active : inactive);
+    display.setControlColors(label[5], arrangePending ? active : inactive);
+
+    for (uint8_t i : { 0, 1, 3, 4, 5 })
+    {
+        display.refreshControl(label[i]);
+    }
 }

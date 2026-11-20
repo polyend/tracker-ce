@@ -69,6 +69,11 @@
 13. **SD-Card Random Name Wordlists (All 3 Devices)**
 	* Moved the random name generator wordlists to `/Words/adjectives.txt` and `/Words/nouns.txt` on the microSD card (one word per line, with a built-in fallback list when the files are absent; initial files provided in [`sd-card/Words/`](sd-card/Words/)), freeing some Flash space on Original Tracker and letting users customize their own wordlists.
 
+7. **Reorder Samples in Sample Loader (All 3 Devices)**
+	* Pressing **`[Rec]`** on the Sample Loader screen toggles an **Arrange** set of actions: **`Move up`** and **`Move down`** move the highlighted instrument (or `[Shift]`-selected block of instruments) one slot up or down the list. The sample in the target slot swaps into the slot that was freed.
+	* Moves are queued: the list shows the new order straight away (moved slots are marked with `*`) and nothing is changed until you press **`Apply`**, which performs all of them in one operation. **`Cancel`** discards the queued moves. Leaving the Sample Loader also discards them.
+	* **`Apply`** asks whether to update patterns: **`Update`** rewrites every pattern step, including undo history, so it keeps playing the same sample after the move. **`Skip`** keeps the slot numbers in patterns, so they play whatever sample now occupies those slots. **`Cancel`** returns to arranging with the queued moves intact.
+
 ### Changed & Fixed
 
 * **Faster UI Rendering & System Responsiveness (All 3 Devices)**:

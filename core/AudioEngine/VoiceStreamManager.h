@@ -76,6 +76,9 @@ class VoiceStreamManager
 
     void clearInstrumentMetadata(int instrIdx);
     void copyInstrumentMetadata(int srcInstrIdx, int dstInstrIdx);
+    // Exchanges the per-instrument stream metadata of two slots (path, CLMT, peaks, slice
+    // cache). mtProject.sampleMemory is not touched - the caller swaps it alongside.
+    void swapInstrumentMetadata(int instrIdxA, int instrIdxB);
     void buildWaveformPeaksFromRam(int instrIdx,
                                    int channel,
                                    const int16_t* samples,
