@@ -2793,7 +2793,9 @@ AUDIO_CORE_RAM bool Sequencer::midiGlidePrepare(uint8_t row,
                                                 strPlayer::strPlayerTrack::strSendStep* oldStep,
                                                 strPlayer::strPlayerTrack::strSendStep* newStep)
 {
-    const uint8_t mode = mtConfig.midi.glideMode;
+    const uint8_t mode = isSynthInstrument(newStep->instrument)
+                           ? MIDI_GLIDE_MODE_BEND
+                           : mtConfig.midi.glideMode;
     if (mode == MIDI_GLIDE_MODE_OFF)
     {
         return false;
