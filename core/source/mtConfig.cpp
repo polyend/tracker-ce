@@ -338,6 +338,11 @@ void checkConfig()
         mtConfig.midi.programChangeInChannel = 0;
     }
 
+    if (mtConfig.midi.glideMode > 3)
+    {
+        mtConfig.midi.glideMode = 0;
+    }
+
     if (mtConfig.midi.middleC > 3)
     {
         mtConfig.midi.middleC = 2;
@@ -533,6 +538,7 @@ void resetConfig()
     mtConfig.midi.slaveClockComp = kExternalClockCompDefaultVal;
     mtConfig.midi.programChangeInMode = 0;
     mtConfig.midi.programChangeInChannel = 0;
+    mtConfig.midi.glideMode = MIDI_GLIDE_MODE_OFF;
 
     // values ----------------------------------------
     mtConfig.values.padsLightBack = PADS_LIGHT_BACK_DEFAULT;

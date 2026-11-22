@@ -94,6 +94,8 @@ AUDIO_CORE_RAM void Sequencer::tick(float intervalSeconds)
 
     updateExternalClockTempo((seqtimesec_t)intervalSeconds);
 
+    midiGlideStep(intervalSeconds);
+
     if (isSetInternalClock() || player.selectionMode)
     {
         // Integer clock, same ticks and offsets as the double accumulator it replaced (internalTickClock.h)
@@ -832,14 +834,15 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
     {
         if (playerRow.stepOpen && playerRow.stepToSend.note >= 0)
         {
-            // looks weird but keeps logic from commit
-            // "Send NOTE OFF to held MIDI notes on track when track muted or sample played"
-            if (isMidiInstrument(playerRow.stepToSend.instrument) ||
-                isSynthInstrument(playerRow.stepToSend.instrument) ||
-                isMidiInstrument(playerRow.stepSent.instrument) ||
-                isSynthInstrument(playerRow.stepSent.instrument))
+            if (!midiGlidePrepare(row, &playerRow.stepSent, &playerRow.stepToSend))
             {
-                sendNoteOff(row, &playerRow.stepSent);
+                if (isMidiInstrument(playerRow.stepToSend.instrument) ||
+                    isSynthInstrument(playerRow.stepToSend.instrument) ||
+                    isMidiInstrument(playerRow.stepSent.instrument) ||
+                    isSynthInstrument(playerRow.stepSent.instrument))
+                {
+                    sendNoteOff(row, &playerRow.stepSent);
+                }
             }
 
             playerRow.stepOpen = 0;
@@ -1041,6 +1044,8 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
 
             playerRow.stepSent = playerRow.stepToSend;
         }
+
+        midiGlideFlushLegatoOff(row);
     }
 
     // **************************
@@ -1622,6 +1627,7 @@ void Sequencer::stop(StopContext context)
     songTimer.stop();
     stopAllOpenNotes();
     cancelFxes();
+    midiGlideClearAll();
 
     player.isPlay = 0;
     player.isStop = 1;
@@ -2621,6 +2627,11 @@ void Sequencer::sendMidiChordOff([[maybe_unused]] uint8_t track,
     }
 }
 
+static uint8_t midiGlideIndex(uint8_t channel, bool toSynth)
+{
+    return toSynth ? (uint8_t)(kMidiInstrumentsCount + channel - 1) : channel - 1;
+}
+
 AUDIO_CORE_RAM void Sequencer::sendNoteOn(uint8_t track,
                                           strPlayer::strPlayerTrack::strSendStep* step)
 {
@@ -2629,6 +2640,8 @@ AUDIO_CORE_RAM void Sequencer::sendNoteOn(uint8_t track,
 
     if (toSynth && synthsMuteState == MuteState::kMuted)
     {
+        const uint8_t mutedChannel = instrumentIdxToMidiChannel(step->instrument);
+        midiGlide[midiGlideIndex(mutedChannel, true)].pending = false;
         return;
     }
 
@@ -2655,6 +2668,73 @@ AUDIO_CORE_RAM void Sequencer::sendNoteOn(uint8_t track,
                          kMaxMidiVelocity);
 
             velocity = clamp(velocity + deltaPerformanceVelocityFx, 0, kMaxMidiVelocity);
+
+            if (toMidi || toSynth)
+            {
+                const uint8_t channel = instrumentIdxToMidiChannel(step->instrument);
+                strMidiGlide& g = midiGlide[midiGlideIndex(channel, toSynth)];
+
+                if (g.pending)
+                {
+                    g.pending = false;
+
+                    if (g.fromNote >= 0 && (uint8_t)g.fromNote != step->note)
+                    {
+                        uint8_t glideFxValue = 0;
+                        if (step->fx[1].type == fx.FX_TYPE_GLIDE)
+                        {
+                            glideFxValue = step->fx[1].value;
+                        }
+                        else if (step->fx[0].type == fx.FX_TYPE_GLIDE)
+                        {
+                            glideFxValue = step->fx[0].value;
+                        }
+
+                        const int32_t glideUs = (int32_t)glideFxValueToMs(glideFxValue) * 1000;
+
+                        if (glideUs > 0)
+                        {
+                            int32_t startCents;
+                            if (g.rampNote >= 0 && g.remainingUs > 0)
+                            {
+                                startCents = (int32_t)g.bend * ((int32_t)g.rangeSemitones * 100) / 8192;
+                            }
+                            else
+                            {
+                                startCents = (int32_t)((int32_t)g.fromNote - (int32_t)step->note) * 100;
+                            }
+
+                            int interval = (int)g.fromNote - (int)step->note;
+                            if (interval < 0)
+                            {
+                                interval = -interval;
+                            }
+
+                            if (toMidi && interval > g.rangeSemitones)
+                            {
+                                const uint8_t range = (uint8_t)clamp<int>(interval, 2, 24);
+                                sendCC(99, 0, channel, false);
+                                sendCC(98, 0, channel, false);
+                                sendCC(6, range, channel, false);
+                                sendCC(38, 0, channel, false);
+                                sendCC(101, 127, channel, false);
+                                g.rangeSemitones = range;
+                            }
+
+                            int32_t startRaw = startCents * 8192 / ((int32_t)g.rangeSemitones * 100);
+                            startRaw = clamp<int32_t>(startRaw, -8192, 8191);
+
+                            g.bend = (int16_t)startRaw;
+                            g.startBend = startRaw;
+                            g.totalUs = glideUs;
+                            g.remainingUs = glideUs;
+                            g.rampNote = (int8_t)step->note;
+
+                            sendPitchbend((int16_t)startRaw, (int8_t)channel, toSynth);
+                        }
+                    }
+                }
+            }
 
             sendMidiNoteOn(
               step->note, velocity, instrumentIdxToMidiChannel(step->instrument), toSynth);
@@ -2689,13 +2769,178 @@ AUDIO_CORE_RAM void Sequencer::sendNoteOff(uint8_t track,
         }
         else
         {
+            const uint8_t channel = instrumentIdxToMidiChannel(instrument);
+            strMidiGlide& g = midiGlide[midiGlideIndex(channel, isSynth)];
 
-            sendMidiNoteOff(step->note, 0, instrumentIdxToMidiChannel(instrument), isSynth);
+            if (g.rampNote >= 0 && (uint8_t)g.rampNote == step->note)
+            {
+                g.rampNote = -1;
+                g.remainingUs = 0;
+                g.bend = 0;
+                sendPitchbend(0, (int8_t)channel, isSynth);
+            }
+
+            sendMidiNoteOff(step->note, 0, channel, isSynth);
         }
     }
     else if (isSampleTrack(track))
     {
         instrumentPlayer[track].noteOff(offOption < 0 ? offOption : step->note);
+    }
+}
+
+AUDIO_CORE_RAM bool Sequencer::midiGlidePrepare(uint8_t row,
+                                                strPlayer::strPlayerTrack::strSendStep* oldStep,
+                                                strPlayer::strPlayerTrack::strSendStep* newStep)
+{
+    const uint8_t mode = mtConfig.midi.glideMode;
+    if (mode == MIDI_GLIDE_MODE_OFF)
+    {
+        return false;
+    }
+
+    const bool oldIsMidi = isMidiInstrument(oldStep->instrument);
+    const bool oldIsSynth = isSynthInstrument(oldStep->instrument);
+
+    if (oldStep->note < 0 ||
+        (oldIsMidi && !isMidiInstrument(newStep->instrument)) ||
+        (oldIsSynth && !isSynthInstrument(newStep->instrument)))
+    {
+        return false;
+    }
+
+    if (oldStep->fx[0].type == fx.FX_TYPE_MIDI_CHORD || oldStep->fx[1].type == fx.FX_TYPE_MIDI_CHORD ||
+        newStep->fx[0].type == fx.FX_TYPE_MIDI_CHORD || newStep->fx[1].type == fx.FX_TYPE_MIDI_CHORD)
+    {
+        return false;
+    }
+
+    uint8_t glideFxValue = 0;
+    if (newStep->fx[1].type == fx.FX_TYPE_GLIDE)
+    {
+        glideFxValue = newStep->fx[1].value;
+    }
+    else if (newStep->fx[0].type == fx.FX_TYPE_GLIDE)
+    {
+        glideFxValue = newStep->fx[0].value;
+    }
+
+    if (glideFxValue == 0)
+    {
+        return false;
+    }
+
+    const uint8_t oldChannel = instrumentIdxToMidiChannel(oldStep->instrument);
+    const uint8_t newChannel = instrumentIdxToMidiChannel(newStep->instrument);
+    if (oldChannel != newChannel)
+    {
+        return false;
+    }
+
+    if (mode == MIDI_GLIDE_MODE_BEND)
+    {
+        strMidiGlide& g = midiGlide[midiGlideIndex(newChannel, oldIsSynth)];
+        g.pending = true;
+        g.fromNote = oldStep->note;
+        return false;
+    }
+
+    strPlayer::strPlayerTrack& playerRow = player.track[row];
+    playerRow.legatoOffPending = 1;
+    playerRow.legatoOffNote = oldStep->note;
+    playerRow.legatoOffChannel = oldChannel;
+    playerRow.legatoOffToSynth = oldIsSynth;
+
+    if (mode == MIDI_GLIDE_MODE_BOTH)
+    {
+        strMidiGlide& g = midiGlide[midiGlideIndex(newChannel, oldIsSynth)];
+        g.pending = true;
+        g.fromNote = oldStep->note;
+    }
+
+    return true;
+}
+
+AUDIO_CORE_RAM void Sequencer::midiGlideFlushLegatoOff(uint8_t row)
+{
+    strPlayer::strPlayerTrack& playerRow = player.track[row];
+
+    if (playerRow.legatoOffPending)
+    {
+        playerRow.legatoOffPending = 0;
+        sendMidiNoteOff(playerRow.legatoOffNote, 0, playerRow.legatoOffChannel, playerRow.legatoOffToSynth);
+    }
+}
+
+AUDIO_CORE_RAM void Sequencer::midiGlideStep(float intervalSeconds)
+{
+    if (!player.isPlay)
+    {
+        return;
+    }
+
+    const int32_t dtUs = (int32_t)(intervalSeconds * 1000000.0f);
+
+    const uint8_t total = kMidiInstrumentsCount + kSynthInstrumentsCount;
+
+    for (uint8_t idx = 0; idx < total; idx++)
+    {
+        strMidiGlide& g = midiGlide[idx];
+
+        if (g.rampNote < 0 || g.remainingUs <= 0)
+        {
+            continue;
+        }
+
+        const bool toSynth = idx >= kMidiInstrumentsCount;
+        const int8_t channel = (int8_t)(toSynth ? idx - kMidiInstrumentsCount + 1 : idx + 1);
+
+        g.remainingUs -= dtUs;
+
+        if (g.remainingUs <= 0)
+        {
+            g.rampNote = -1;
+            g.remainingUs = 0;
+            g.bend = 0;
+            sendPitchbend(0, channel, toSynth);
+        }
+        else
+        {
+            const int32_t raw = (g.startBend * g.remainingUs) / g.totalUs;
+            if (raw != g.bend)
+            {
+                g.bend = (int16_t)raw;
+                sendPitchbend((int16_t)raw, channel, toSynth);
+            }
+        }
+    }
+}
+
+AUDIO_CORE_RAM void Sequencer::midiGlideClearAll()
+{
+    const uint8_t total = kMidiInstrumentsCount + kSynthInstrumentsCount;
+
+    for (uint8_t idx = 0; idx < total; idx++)
+    {
+        strMidiGlide& g = midiGlide[idx];
+
+        const bool toSynth = idx >= kMidiInstrumentsCount;
+        const int8_t channel = (int8_t)(toSynth ? idx - kMidiInstrumentsCount + 1 : idx + 1);
+
+        if (g.rampNote >= 0 || g.bend != 0)
+        {
+            sendPitchbend(0, channel, toSynth);
+        }
+
+        g.bend = 0;
+        g.rampNote = -1;
+        g.pending = false;
+        g.remainingUs = 0;
+    }
+
+    for (uint8_t row = 0; row < kAllTracks; row++)
+    {
+        player.track[row].legatoOffPending = 0;
     }
 }
 
