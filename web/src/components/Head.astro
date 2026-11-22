@@ -1,0 +1,49 @@
+---
+interface Props {
+	title?: string;
+	description?: string;
+	canonicalUrl?: string;
+	socialImageUrl?: string;
+	socialImageAlt?: string;
+}
+
+const {
+	title = 'Polyend Tracker CE',
+	description = 'Discover community-built open-source firmware for the Polyend Tracker, Tracker+ and Tracker Mini, with musician guides, custom synth engines, and effects plugins.',
+	canonicalUrl,
+	socialImageUrl,
+	socialImageAlt = title,
+} = Astro.props;
+
+const socialCardType = socialImageUrl ? 'summary_large_image' : 'summary';
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
+const pagefindUrl = `${baseUrl}/pagefind`;
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width" />
+<meta name="description" content={description} />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+<meta name="generator" content={Astro.generator} />
+<title>{title}</title>
+
+<link rel="icon" type="image/png" sizes="32x32" href={`${baseUrl}/favicon-32x32.png`}>
+<link rel="icon" type="image/png" sizes="16x16" href={`${baseUrl}/favicon-16x16.png`}>
+<link rel="stylesheet" href={`${pagefindUrl}/pagefind-component-ui.css`} />
+<pagefind-config bundle-path={`${pagefindUrl}/`} base-url={`${baseUrl}/`}></pagefind-config>
+<script is:inline type="module" src={`${pagefindUrl}/pagefind-component-ui.js`}></script>
+{canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+
+<meta property="og:site_name" content="Polyend Tracker CE" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+{canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+{socialImageUrl && <meta property="og:image" content={socialImageUrl} />}
+{socialImageUrl && <meta property="og:image:alt" content={socialImageAlt} />}
+
+<meta name="twitter:card" content={socialCardType} />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+{socialImageUrl && <meta name="twitter:image" content={socialImageUrl} />}
+{socialImageUrl && <meta name="twitter:image:alt" content={socialImageAlt} />}

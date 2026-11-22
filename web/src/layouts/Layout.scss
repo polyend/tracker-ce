@@ -1,0 +1,82 @@
+@font-face {
+    font-family: "Liberation Sans";
+    src: url("../assets/fonts/LiberationSans-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Liberation Sans";
+    src: url("../assets/fonts/LiberationSans-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Liberation Sans";
+    src: url("../assets/fonts/LiberationSans-Italic.ttf") format("truetype");
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Liberation Sans";
+    src: url("../assets/fonts/LiberationSans-BoldItalic.ttf") format("truetype");
+    font-style: italic;
+    font-weight: 700;
+    font-display: swap;
+}
+
+main {
+    display: flex;
+    font-family: "Liberation Sans", Arial, sans-serif;
+    font-size: 16px;
+    gap: 0;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+
+    nav {
+        border-right: solid 2px #181818;
+        min-width: 180px;
+        overflow: auto;
+        padding: 5px 10px;
+    }
+
+    article {
+        min-width: 0;
+        overflow: auto;
+        padding: 0 6px;
+    }
+
+    .hidden {
+        display: none;
+    } 
+}
+
+button {
+    color-scheme: light;
+    font-size: 22px;
+    height: 38px;
+    border-radius: 5px;
+    border: solid 1px #181818;
+    margin-top: 12px;
+    padding: 0 8px 2px 8px;
+
+    :hover {
+        cursor: pointer;
+    }
+}
+
+@media (width > 779px) {
+    main {
+        gap: 10px;
+
+        article {
+            padding: 0 10px;
+        }
+    }
+}

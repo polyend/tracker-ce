@@ -1,0 +1,38 @@
+:root {
+  color-scheme: dark;
+
+  background-color: light-dark(#FFFFFF, #111111);
+  color: light-dark(#000000, #f1f1f1);
+  scrollbar-color: light-dark(#444444 #111111, #444444 #FFFFFF);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+.note-color {
+    background-color: #22D6B8;
+}
+
+.instrument-color {
+    background-color: #F0E040;
+}
+
+.fx1-color {
+    background-color: #A855F7;
+}
+
+.fx2-color {
+    background-color: #38BDF8;
+}
+
+#search-modal {
+  --pf-background: #111111;
+  --pf-text: #f1f1f1;
+  --pf-border: solid 2px #666666;
+}
+
+:root[data-theme="light"] #search-modal {
+  --pf-background: #FFFFFF;
+  --pf-text: #000000;
+}
