@@ -78,9 +78,8 @@ bool isProtectedRootFolder(const char* folderName)
     }
 
     static const char* const kProtectedFolders[] = {
-        "Samples",    "SynthSamples", "Synths",    "Patches",   "Projects",
-        "Mod",        "Mods",         "Effects",   "Recordings","Export",
-        "Workspace",  "Firmware",     "Themes",    "Games",     "System Volume Information",
+        "System",   ".system",    "Projects", "Mod",       "Recordings",
+        "Export",   "Workspace",  "Firmware", "System Volume Information",
     };
 
     for (const char* protectedName : kProtectedFolders)
@@ -2044,7 +2043,8 @@ void cGlobalFileBrowser::handleDeleteRequest()
         {
             if (!denyReason.empty())
             {
-                mtPopups.show(1, denyReason.c_str());
+                snprintf(deleteDeniedText, sizeof(deleteDeniedText), "%s", denyReason.c_str());
+                mtPopups.show(1, deleteDeniedText);
             }
             return;
         }

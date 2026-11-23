@@ -346,6 +346,16 @@ void checkConfig()
         mtConfig.midi.ccInChannel = 0;
     }
 
+    if (mtConfig.midi.programChangeInMode > 3)
+    {
+        mtConfig.midi.programChangeInMode = 0;
+    }
+
+    if (mtConfig.midi.programChangeInChannel > 16)
+    {
+        mtConfig.midi.programChangeInChannel = 0;
+    }
+
     if (mtConfig.midi.middleC > 3)
     {
         mtConfig.midi.middleC = 2;
@@ -456,6 +466,9 @@ void checkConfig()
     if (mtConfig.general.noteDisplayMode >= NoteDisplayMode::kNoteDisplayModeCount)
         mtConfig.general.noteDisplayMode = NoteDisplayMode::kNoteDisplayModeDefault;
 
+    if (mtConfig.general.confirmFileDelete > 2)
+        mtConfig.general.confirmFileDelete = 1;
+
     mtConfig.general.lineInOutType = 0;
 
     if (mtConfig.general.theme >= ThemeManager::kMaxCustomThemes)
@@ -561,6 +574,8 @@ void resetConfig()
     mtConfig.midi.ccInChannel = 0;
     mtConfig.midi.middleC = 2;
     mtConfig.midi.slaveClockComp = kExternalClockCompDefaultVal;
+    mtConfig.midi.programChangeInMode = 0;
+    mtConfig.midi.programChangeInChannel = 0;
 #ifdef TRACKER_MINI
     mtConfig.remote.remoteEnabled = 0;
     mtConfig.remote.remoteProfile = 0;
@@ -610,6 +625,7 @@ void resetConfig()
     mtConfig.general.previewVolume = PREVIEW_VOLUME_DEFAULT;
     mtConfig.general.recThreshold = recThreshold_default;
     mtConfig.general.noteDisplayMode = NoteDisplayMode::kNoteDisplayModeDefault;
+    mtConfig.general.confirmFileDelete = 1;
 
     // interface ----------------------------------------
     mtConfig.interface.fxPopupDescription = 0;

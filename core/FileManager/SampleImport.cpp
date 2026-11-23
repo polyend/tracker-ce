@@ -17,6 +17,27 @@ constexpr uint32_t lofiSampleRate = targetSampleRate / 2;
 
 __NOINIT(EXTERNAL_RAM)
 static FileManagerOperation::SampleLoadData sampleImportDataBuff[48];
+__NOINIT(EXTERNAL_RAM) static char s_singleImportPath[PATCH_SIZE];
+__NOINIT(EXTERNAL_RAM) static char s_singleImportName[kMaxFileNameLen + 1];
+static char* s_singleImportNamePtr = s_singleImportName;
+
+// The slots of an import are given their place in sample memory, and the instruments behind
+// them are moved to make room, before the first file is loaded. A slot that then gets no sample
+// is emptied here and the gap is closed, as after a delete. Left open, the gap would not be
+// counted as used memory and a later import could be placed past the end of sample memory.
+static void releaseSlotsWithoutSample(int firstSlot, int lastSlot)
+{
+    for (int slot = firstSlot; slot <= lastSlot; slot++)
+    {
+        uint32_t sampleSize = newFileManager.getSampleMemorySize(slot, slot);
+
+        newFileManager.completeLoadedInstrumentStruct(slot, false);
+        engine.clearBlockedInstrument(slot);
+
+        newFileManager.moveSampleMemory(newFileManager.calcFirstSlotToMoveInMemory(slot + 1),
+                                        -(int32_t)sampleSize);
+    }
+}
 
 void SampleImport::update() // fmImportSamplesToWorkspace
 {
@@ -28,9 +49,7 @@ void SampleImport::update() // fmImportSamplesToWorkspace
         {
             importSamplesToWorkspaceInit();
             memset(sampleImportDataBuff, 0, sizeof(sampleImportDataBuff));
-            loadImportingSamplesData(sampleImportDataBuff,
-                                     newFileManager.getExplorerPath(),
-                                     newFileManager.getExplorerList());
+            loadImportingSamplesData(sampleImportDataBuff, importSourcePath, importSourceList);
             nextStep = SampleImportStep::moveMemory;
             break;
         }
@@ -90,6 +109,12 @@ void SampleImport::update() // fmImportSamplesToWorkspace
                 }
                 memoryToImportDone += fileTransfer.getBytesComplited();
                 fileTransfer.clearBytesComplited();
+            }
+            else if (newFileManager.getCurrentOperation() != fmImportSamplesToWorkspace)
+            {
+                // the save failed and ended the import; this sample is loaded, the rest is not
+                engine.clearBlockedInstrument(currentInstrument);
+                releaseSlotsWithoutSample(currentInstrument + 1, importEndSlot);
             }
             break;
         }
@@ -195,8 +220,10 @@ void SampleImport::importSamplesToWorkspaceFinish()
 
 //=================================================================================================
 //=================================================================================================
-bool SampleImport::importSamplesToProject(uint8_t fileFrom,
-                                          uint8_t fileTo,
+bool SampleImport::importSamplesToProject(const char* sourceDirPath,
+                                          char* const* sourceFileList,
+                                          uint16_t fileFrom,
+                                          uint16_t fileTo,
                                           uint8_t instrumentSlot,
                                           uint16_t dataFrom,
                                           uint16_t dataTo,
@@ -207,6 +234,8 @@ bool SampleImport::importSamplesToProject(uint8_t fileFrom,
     if (newFileManager.getStatus() != fmIdle)
         return false;
     if (newFileManager.getCurrentOperation() != fmNoOperation)
+        return false;
+    if (sourceDirPath == nullptr || sourceFileList == nullptr)
         return false;
     if (dataFrom >= dataTo || dataFrom > std::numeric_limits<uint16_t>::max() ||
         dataTo > std::numeric_limits<uint16_t>::max())
@@ -221,6 +250,8 @@ bool SampleImport::importSamplesToProject(uint8_t fileFrom,
         fileTo = fileFrom + slotsAfterFirst;
     }
 
+    importSourcePath = sourceDirPath;
+    importSourceList = sourceFileList;
     sampleChannelMode = sampleMode;
     importLoadMode = loadMode;
     importCurrentFileIdx = fileFrom;
@@ -303,25 +334,11 @@ bool SampleImport::importSampleToProject(char* filePath,
         return false;
     }
 
-    // explorerCurrentPath, explorerList[importCurrentFile]
-    // kozrysta z listy plikow explorera
-    // ustawia plik do importu na 0 miejscu tablicy explorerList[]
-    // i uruchamia import jak w sample laderze
-    if (newFileManager.getExplorerList()[0] != nullptr)
-    {
-        delete[] newFileManager.getExplorerList()[0];
-        newFileManager.getExplorerList()[0] = nullptr;
-    }
+    snprintf(s_singleImportName, sizeof(s_singleImportName), "%s.wav", fileName);
+    polystrncpy(s_singleImportPath, filePath, sizeof(s_singleImportPath));
+    importSourcePath = s_singleImportPath;
+    importSourceList = &s_singleImportNamePtr;
 
-    uint16_t len = strlen(fileName) + 5; // + .wav + \0
-    newFileManager.getExplorerList()[0] = new char[len];
-    snprintf(newFileManager.getExplorerList()[0], len, "%s.wav", fileName);
-
-    // wymagane tez ustawienie aktualnego path explorera
-    // na lokalizajce wczytywanego pliku
-    polystrncpy(newFileManager.getExplorerPath(), filePath, PATCH_SIZE);
-
-    // liczy sie tlyko 0 index w tablicy
     importCurrentFileIdx = 0;
 
     // default parametry importu
@@ -337,9 +354,6 @@ bool SampleImport::importSampleToProject(char* filePath,
     currentInstrument = instrumentSlot;
     importStartSlot = instrumentSlot;
     importEndSlot = instrumentSlot;
-
-    // reset browsera przy nastepnym uzywaniu
-    newFileManager.resetBrowse();
 
     newFileManager.setStatus(fmImportingSamplesToWorkspace);
     operationStep = SampleImportStep::initStep;
@@ -366,8 +380,8 @@ static bool importedSampleFits(int slot, int lastSlot, uint16_t channelCount, ui
 //=================================================================================================
 //=================================================================================================
 void SampleImport::loadImportingSamplesData(FileManagerOperation::SampleLoadData* sampleImportData,
-                                            char* sourceFilePath,
-                                            char** sourceFileNameList)
+                                            const char* sourceFilePath,
+                                            char* const* sourceFileNameList)
 {
     char srcSamplePath[PATCH_SIZE];
     strWavFileHeader sampleHead;
@@ -742,12 +756,18 @@ bool SampleImport::loadSampleDataToMemeory(int idx,
     }
     else if (loadStatus == fileTransferFileNoExist || loadStatus == fileTransferFileNoValid)
     {
-        newFileManager.completeLoadedInstrumentStruct(idx, false);
+        releaseSlotsWithoutSample(idx, idx);
+
+        // closing the gap released the slots behind this one, which are still to be loaded
+        for (int slot = idx + 1; slot <= importEndSlot; slot++)
+        {
+            engine.setBlockedInstrument(slot);
+        }
         return true;
     }
     else if (loadStatus >= fileTransferError)
     {
-        newFileManager.completeLoadedInstrumentStruct(idx, false);
+        releaseSlotsWithoutSample(idx, importEndSlot);
         stopOperationWithError(fmImportSamplesError);
     }
 
