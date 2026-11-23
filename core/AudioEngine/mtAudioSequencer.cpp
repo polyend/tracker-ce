@@ -200,25 +200,17 @@ void playerEngine::fxGlide(uint8_t fx_val, uint8_t fx_n)
     uint8_t otherFx_n = !fx_n;
 
     uint8_t maxFxGlide = sequencer.getFxMax(Sequencer::strFxConsts::FX_TYPE_GLIDE);
-    uint8_t minFxGlide = sequencer.getFxMin(Sequencer::strFxConsts::FX_TYPE_GLIDE);
-    uint8_t halfFxGlide = maxFxGlide / 2;
 
     if (fx_n == MOST_SIGNIFICANT_FX)
     {
-        currentSeqModValues.glide =
-          (fx_val > halfFxGlide)
-            ? mapClamped<int>(fx_val, halfFxGlide, maxFxGlide, 1000, GLIDE_MAX)
-            : mapClamped<int>(fx_val, minFxGlide, halfFxGlide, GLIDE_MIN, 1000);
+        currentSeqModValues.glide = glideFxValueToMs(fx_val, maxFxGlide);
     }
     else if (fx_n == LEAST_SIGNIFICANT_FX)
     {
         if (!trackControlParameter[(int)controlType::sequencerMode + otherFx_n]
                                   [(int)parameterList::glide])
         {
-            currentSeqModValues.glide =
-              (fx_val > halfFxGlide)
-                ? mapClamped<int>(fx_val, halfFxGlide, maxFxGlide, 1000, GLIDE_MAX)
-                : mapClamped<int>(fx_val, minFxGlide, halfFxGlide, GLIDE_MIN, 1000);
+            currentSeqModValues.glide = glideFxValueToMs(fx_val, maxFxGlide);
         }
     }
     trackControlParameter[(int)controlType::sequencerMode + fx_n][(int)parameterList::glide] = 1;

@@ -460,6 +460,10 @@ class Sequencer
             uint8_t recOpen = 0;
             uint8_t recNoteOnStepIdx = 0;
 
+            bool legatoOffPending = 0;
+            int8_t legatoOffNote = -1;
+            uint8_t legatoOffChannel = 0;
+
             int16_t noteSource = -1;
 
             uint16_t uStep = 0;              // aktualny microstep
@@ -1014,6 +1018,14 @@ class Sequencer
     void sendMidiChordOn(uint8_t track, strPlayer::strPlayerTrack::strSendStep* step);
     void sendMidiChordOff(uint8_t track, strPlayer::strPlayerTrack::strSendStep* step);
 
+    bool midiGlidePrepare(uint8_t row,
+                          strPlayer::strPlayerTrack::strSendStep* oldStep,
+                          strPlayer::strPlayerTrack::strSendStep* newStep,
+                          uint8_t* armedChannel);
+    void midiGlideFlushLegatoOff(uint8_t row);
+    void midiGlideStep(float intervalSeconds);
+    void midiGlideClearAll();
+
     uint16_t getChordBitmask(uint8_t chord);
     uint16_t getChordBitmaskForArp(uint8_t chord);
 
@@ -1049,6 +1061,8 @@ class Sequencer
     strPattern* bufferPattern;
 
     strPlayer player;
+
+    strMidiGlide midiGlide[kMidiInstrumentsCount];
 
     int externalClockPulses = 0;
     int externalClocksToPlay = 0;

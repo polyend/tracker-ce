@@ -210,6 +210,7 @@ const strItemTypeListText programChangeInChannelSetup{ &mtConfig.midi.programCha
                                                        17,
                                                        notesChannel };
 const strItemTypeListText middleCSetup{ &mtConfig.midi.middleC, 4, middleC };
+const strItemTypeListText midiGlideModeSetup{ &mtConfig.midi.glideMode, 4, midiGlideMode };
 const strItemTypeListTextWithAction slaveClockCompSetup{ &mtConfig.midi.slaveClockComp, std::size(slaveClockComp),  slaveClockComp, setSlaveClockCompValue };
 
 cMenuItem melClockIn(menuMidi, "Clock in", nullptr, menuTypeItemListText, &clockInSetup);
@@ -231,6 +232,11 @@ cMenuItem melNotesInChannel(menuMidi,
                             menuTypeItemListText,
                             &notesInChanneletup);
 cMenuItem melNotsOutMode(menuMidi, "MIDI out", nullptr, menuTypeItemListText, &notesOutModeSetup);
+cMenuItem melMidiGlideMode(menuMidi,
+                           "MIDI Glide",
+                           nullptr,
+                           menuTypeItemListText,
+                           &midiGlideModeSetup);
 cMenuItem melCCInMode(menuMidi, "CC in", supportedCcInDesc, menuTypeItemListText, &ccInModeSetup);
 cMenuItem melCCInChannel(menuMidi,
                          "CC in channel",
