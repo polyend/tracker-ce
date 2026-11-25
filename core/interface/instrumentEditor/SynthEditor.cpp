@@ -143,18 +143,30 @@ void cInstrumentEditor::synthCommonPreviewButtonFunct(uint8_t state)
 
 void cInstrumentEditor::playSynthNoteByPad(uint8_t pad, uint8_t state, uint8_t customLightPad)
 {
+    static uint8_t heldNote[48] = { 0 };
+    if (pad >= 48)
+        return;
+
     if (state == buttonPress)
     {
+        uint8_t noteFromPad;
+#if defined(FEATURE_SYNTH) && !defined(TRACKER_MINI)
+        if (mode == mtInstEditModeSynthPatchEdit)
+            noteFromPad = mtPadBoard.getSynthEditNoteFromPad(pad);
+        else
+            noteFromPad = mtPadBoard.getNoteFromPad(pad);
+#else
+        noteFromPad = mtPadBoard.getNoteFromPad(pad);
+#endif
+        heldNote[pad] = noteFromPad;
         padsBacklight.setFrontLayer(
           1, mtConfig.values.padsLightFront, customLightPad < 48 ? customLightPad : pad);
-        uint8_t noteFromPad = mtPadBoard.getNoteFromPad(pad);
         sequencer.handleNoteOn(Sequencer::GRID_OUTSIDE_PATTERN, noteFromPad, -1, pad);
     }
     else if (state == buttonRelease)
     {
         padsBacklight.setFrontLayer(0, 0, customLightPad < 48 ? customLightPad : pad);
-        uint8_t noteFromPad = mtPadBoard.getNoteFromPad(pad);
-        sequencer.handleNoteOff(Sequencer::GRID_OUTSIDE_PATTERN, noteFromPad, 0, pad);
+        sequencer.handleNoteOff(Sequencer::GRID_OUTSIDE_PATTERN, heldNote[pad], 0, pad);
     }
 }
 

@@ -2309,44 +2309,8 @@ float cInstrumentEditor::getSynthCCParamValueMin(int, SynthInstrumentParamsCC pa
 
 bool cInstrumentEditor::isSynthPercSectionBegin(int note)
 {
-    int kickBeginNote =
-      isInScale(60, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 60 : 61;
-    assert(
-      isInScale(kickBeginNote, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale));
-    int snareBeginNote =
-      isInScale(62, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 62 : 63;
-    assert(
-      isInScale(snareBeginNote, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale));
-    int closedHihatBeginNote =
-      isInScale(64, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 64 : 65;
-    assert(isInScale(
-      closedHihatBeginNote, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale));
-    int openHihatBeginNote =
-      isInScale(66, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 66 : 67;
-    assert(isInScale(
-      openHihatBeginNote, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale));
-    int cymbalBeginNote =
-      isInScale(68, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 68 : 69;
-    assert(isInScale(
-      cymbalBeginNote, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale));
-    int percBeginNote =
-      isInScale(70, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 70 : 71;
-    assert(
-      isInScale(percBeginNote, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale));
-    int bassBeginNoteFirstSection =
-      isInScale(0, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 0 : 1;
-    assert(isInScale(bassBeginNoteFirstSection,
-                     mtProject.values.padBoardRootNote,
-                     mtProject.values.padBoardScale));
-    int bassBeginNoteSecondSection =
-      isInScale(72, mtProject.values.padBoardRootNote, mtProject.values.padBoardScale) ? 72 : 73;
-    assert(isInScale(bassBeginNoteSecondSection,
-                     mtProject.values.padBoardRootNote,
-                     mtProject.values.padBoardScale));
-
-    return note == kickBeginNote || note == snareBeginNote || note == closedHihatBeginNote ||
-           note == openHihatBeginNote || note == cymbalBeginNote || note == percBeginNote ||
-           note == bassBeginNoteSecondSection || note == bassBeginNoteFirstSection;
+    return note == 0 || note == 60 || note == 62 || note == 64 || note == 66 || note == 68 ||
+           note == 70 || note == 72;
 }
 
 int cInstrumentEditor::convertPadForEditPatchScreen(int pad)
@@ -2357,9 +2321,12 @@ int cInstrumentEditor::convertPadForEditPatchScreen(int pad)
         20, 21, 22, 23, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11,
     };
 
-    static const uint8_t patchEditPadBoard[32] = { 28, 29, 30, 31, 32, 33, 34, 35, 20, 21, 22,
-                                                   23, 24, 25, 26, 27, 12, 13, 14, 15, 16, 17,
-                                                   18, 19, 4,  5,  6,  7,  8,  9,  10, 11 };
+    static const uint8_t patchEditPadBoard[32] = { 40, 41, 42, 43, 44, 45, 46, 47, 28, 29, 30,
+                                                   31, 32, 33, 34, 35, 16, 17, 18, 19, 20, 21,
+                                                   22, 23, 4,  5,  6,  7,  8,  9,  10, 11 };
+
+    if (pad % 12 < 4)
+        return pad;
 
     int resultIdx = pad - 4 * ((pad / 12) + 1);
 
@@ -2866,12 +2833,18 @@ void cInstrumentEditor::lightUpPadBoard()
                     if (!synthTypes.empty() &&
                         synthTypes.at(synthType) == polysynth::InstrumentTypeId::kDrumSynth)
                     {
-
+#ifndef TRACKER_MINI
+                        padsBacklight.setBackLayer(
+                          isSynthPercSectionBegin(mtPadBoard.getSynthEditNoteFromPad(pad)) ? 1 : 0,
+                          mtConfig.values.padsLightBack,
+                          pad);
+#else
                         int playedPad = clamp<int>(IE->convertPadForEditPatchScreen(pad), 0, 47);
                         padsBacklight.setBackLayer(
                           isSynthPercSectionBegin(mtPadBoard.getNoteFromPad(playedPad)) ? 1 : 0,
                           mtConfig.values.padsLightBack,
                           pad);
+#endif
                     }
                 }
             }

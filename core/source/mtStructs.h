@@ -360,6 +360,7 @@ const uint16_t MAX_GRANULAR_LENGTH = 44100;
 const float NOTE_CORRECTION_COEFFICIENT = 44100.0f / 44117.64706f;
 
 constexpr uint8_t FIRST_BEAT_SLICE_NOTE = 24;
+constexpr uint8_t FIRST_DRUM_SYNTH_NOTE = 36;
 
 static constexpr int kMaxFileMemoryPerRecentProject = 500;
 static constexpr int kRecentProjectListLength = 10;

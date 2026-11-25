@@ -31,8 +31,9 @@ class cMtPadBoard
     void releaseInstrumentsTakenByPads();
     void cutAllInstrument();
 
-    uint8_t countPadsWithNote(int8_t note, uint8_t* pads);
+    uint8_t countPadsWithNote(int8_t note, uint8_t* pads, bool drumScaleAware = false);
     uint8_t getNoteFromPad(int8_t pad, bool isBeatSlice = false);
+    uint8_t getSynthEditNoteFromPad(int8_t pad);
     int8_t getEmptyVoice();
 
   private:

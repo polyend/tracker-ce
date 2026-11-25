@@ -7,6 +7,7 @@
 
 #include "ctype.h"
 #include "util_math.h"
+#include <algorithm>
 #include <cr_section_macros.h>
 
 extern Sequencer sequencer;
@@ -69,10 +70,41 @@ void Sequencer::fillLinearNotes(int16_t fillStep,
     strSelection* sel = &selection;
     if (!isSelectionCorrect(sel))
         return;
-    strPattern::strTrack::strStep* step;
-    //	uint8_t scale = mtProject.values.padBoardScale;
+
     uint8_t root = mtProject.values.padBoardRootNote;
 
+    from = clamp<int>(from, STEP_NOTE_MIN, STEP_NOTE_MAX);
+    to = clamp<int>(to, STEP_NOTE_MIN, STEP_NOTE_MAX);
+
+    const bool descending = from > to;
+    int16_t first = std::min(from, to);
+    int16_t last = std::max(from, to);
+
+    while (first <= last && !isInScale(first, root, scale))
+        first++;
+    while (last >= first && !isInScale(last, root, scale))
+        last--;
+
+    if (first > last)
+    {
+        first = std::min(from, to);
+        while (first <= STEP_NOTE_MAX && !isInScale(first, root, scale))
+            first++;
+        if (first > STEP_NOTE_MAX)
+            return;
+        last = first;
+    }
+
+    int16_t degreeCount = 0;
+    for (int16_t n = first; n <= last; n++)
+    {
+        if (isInScale(n, root, scale))
+            degreeCount++;
+    }
+
+    int16_t totalSteps = sel->lastStep - sel->firstStep + 1;
+
+    strPattern::strTrack::strStep* step;
     for (uint8_t t = sel->firstTrack; t <= sel->lastTrack; t++)
     {
         for (uint8_t s = sel->firstStep, offset = 0; s <= sel->lastStep; s++, offset++)
@@ -80,26 +112,35 @@ void Sequencer::fillLinearNotes(int16_t fillStep,
             step = &currentPattern->track[t].step[s];
             if (isStepToFillNote(step, offset, fillStep, density))
             {
-                int newNote = round(mapClamped<float>(
-                  (float)offset + sel->firstStep, sel->firstStep, sel->lastStep, from, to));
+                int16_t degree;
+                if (totalSteps <= 1)
+                    degree = descending ? degreeCount - 1 : 0;
+                else if (degreeCount <= 1)
+                    degree = 0;
+                else if (descending)
+                    degree = (degreeCount - 1) -
+                             (offset * (degreeCount - 1) * 2 + totalSteps - 1) /
+                             (2 * (totalSteps - 1));
+                else
+                    degree =
+                      (offset * (degreeCount - 1) * 2 + totalSteps - 1) / (2 * (totalSteps - 1));
 
-                for (uint8_t a = 0; a < 12; a++)
+                int16_t newNote = first;
+                for (int16_t d = 0; d < degree; d++)
                 {
-                    if (isInScale(newNote, root, scale))
-                        break;
-                    newNote++;
-                }
-                newNote = clamp<int>(newNote, STEP_NOTE_MIN, STEP_NOTE_MAX);
-
-                if (isInScale(newNote, root, scale))
-                {
-                    if (step->isNoteEmpty())
+                    do
                     {
-                        step->instrument = changeInstrumentInSpecificOrder(
-                          mtProject.values.lastUsedInstrument, 0, !isSampleTrack(t));
+                        newNote++;
                     }
-                    step->note = newNote;
+                    while (!isInScale(newNote, root, scale));
                 }
+
+                if (step->isNoteEmpty())
+                {
+                    step->instrument = changeInstrumentInSpecificOrder(
+                      mtProject.values.lastUsedInstrument, 0, !isSampleTrack(t));
+                }
+                step->note = clamp<int>(newNote, STEP_NOTE_MIN, STEP_NOTE_MAX);
             }
         }
     }
