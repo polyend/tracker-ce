@@ -27,7 +27,11 @@ elapsedMillis save_delay;
 static uint8_t saveFlag = 0;
 static uint8_t saveAsapFlag = 0;
 
+#ifdef TRACKER_MINI
+static const uint8_t eepromStructsCount = 10;
+#else
 static const uint8_t eepromStructsCount = 9;
+#endif
 static uint8_t* eepromStructsPtr[eepromStructsCount]{
     (uint8_t*)&mtConfig.audioCodecConfig,
     (uint8_t*)&mtConfig.firmware,
@@ -38,12 +42,18 @@ static uint8_t* eepromStructsPtr[eepromStructsCount]{
     (uint8_t*)&mtConfig.metronome,
     (uint8_t*)&mtConfig.debug,
     (uint8_t*)&mtConfig.common,
+#ifdef TRACKER_MINI
+    (uint8_t*)&mtConfig.remote,
+#endif
 };
 
 static uint16_t eepromStructsSizes[]{
     sizeof(mtConfig.audioCodecConfig), sizeof(mtConfig.firmware), sizeof(mtConfig.midi),
     sizeof(mtConfig.values),           sizeof(mtConfig.general),  sizeof(mtConfig.interface),
     sizeof(mtConfig.metronome),        sizeof(mtConfig.debug),    sizeof(mtConfig.common),
+#ifdef TRACKER_MINI
+    sizeof(mtConfig.remote),
+#endif
 };
 
 void initConfig(Platform* platform)
@@ -92,6 +102,9 @@ void forceSaveConfig()
     mtConfig.metronome.size = sizeof(mtConfig.metronome);
     mtConfig.debug.size = sizeof(mtConfig.debug);
     mtConfig.common.size = sizeof(mtConfig.common);
+#ifdef TRACKER_MINI
+    mtConfig.remote.size = sizeof(mtConfig.remote);
+#endif
 
     //	uint16_t writedSize = 0;
     //
@@ -133,6 +146,11 @@ void forceSaveConfig()
     configManager->writeData(((uint32_t)&mtConfig.common - (uint32_t)&mtConfig),
                              &mtConfig.common,
                              sizeof(mtConfig.common));
+#ifdef TRACKER_MINI
+    configManager->writeData(((uint32_t)&mtConfig.remote - (uint32_t)&mtConfig),
+                             &mtConfig.remote,
+                             sizeof(mtConfig.remote));
+#endif
 }
 
 //###############################################################
@@ -346,6 +364,28 @@ void checkConfig()
     mtConfig.midi.slaveClockComp =
       clamp(mtConfig.midi.slaveClockComp, (uint8_t)0, (uint8_t)kExternalClockCompMaxVal);
 
+#ifdef TRACKER_MINI
+    mtConfig.remote.remoteEnabled = mtConfig.remote.remoteEnabled ? 1 : 0;
+    if (mtConfig.remote.remoteProfile > kMidiRemoteUserProfiles)
+        mtConfig.remote.remoteProfile = 0;
+    if (mtConfig.remote.remoteChannel > 16)
+        mtConfig.remote.remoteChannel = 1;
+    if (mtConfig.remote.remoteSource > 2)
+        mtConfig.remote.remoteSource = 0;
+    if (mtConfig.remote.remoteLearnAction >= kMidiRemoteActionCount)
+        mtConfig.remote.remoteLearnAction = 0;
+    for (uint8_t profile = 0; profile < kMidiRemoteUserProfiles; ++profile)
+    {
+        for (uint8_t action = 0; action < kMidiRemoteActionCount; ++action)
+        {
+            auto& binding = mtConfig.remote.remoteBindings[profile][action];
+            if (binding.type > 2 || (binding.type != 0 && binding.number > 127))
+                binding = {};
+        }
+    }
+
+#endif
+
     // VALUES CHECK  --------------------
     if (mtConfig.values.padsLightBack > 31)
         mtConfig.values.padsLightBack = PADS_LIGHT_BACK_DEFAULT;
@@ -536,6 +576,17 @@ void resetConfig()
     mtConfig.midi.slaveClockComp = kExternalClockCompDefaultVal;
     mtConfig.midi.programChangeInMode = 0;
     mtConfig.midi.programChangeInChannel = 0;
+#ifdef TRACKER_MINI
+    mtConfig.remote.remoteEnabled = 0;
+    mtConfig.remote.remoteProfile = 0;
+    mtConfig.remote.remoteChannel = 1;
+    mtConfig.remote.remoteSource = 0;
+    mtConfig.remote.remoteLearnAction = 0;
+    for (auto& profile : mtConfig.remote.remoteBindings)
+        for (auto& binding : profile)
+            binding = {};
+
+#endif
 
     // values ----------------------------------------
     mtConfig.values.padsLightBack = PADS_LIGHT_BACK_DEFAULT;

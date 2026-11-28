@@ -3,6 +3,7 @@
 
 #include "configEditor/configMenuActions.h"
 #include "ThemeManager.h"
+#include "mtMidiRemote.h"
 
 #include "infoViewer/infoViewerDefs.h"
 
@@ -30,6 +31,9 @@ cMenuGroup menuBase(menuBase, 0);
 cMenuGroup menuProject(menuBase, "Project Settings");
 cMenuGroup menuGeneral(menuBase, "General");
 cMenuGroup menuMidi(menuBase, "MIDI");
+#ifdef TRACKER_MINI
+cMenuGroup menuMidiRemote(menuMidi, "Remote control");
+#endif
 
 cMenuGroup menuUsb(menuBase, "USB");
 
@@ -253,6 +257,89 @@ cMenuItem melSlaveClockComp(menuMidi,
                             slaveClockCompDesc,
                             menuTypeItemListTextWithAction,
                             &slaveClockCompSetup);
+
+
+#ifdef TRACKER_MINI
+// The Launchpad's note grid is deliberately left free for musical input.
+static const char* const remoteProfiles[] = {
+    "Launchpad X", "Custom 1", "Custom 2", "Custom 3"
+};
+static const char* const remoteSources[] = { "USB", "TRS MIDI", "Both" };
+static const char* const remoteActions[] = {
+    "Cursor up", "Cursor down", "Cursor left", "Cursor right",
+    "Select / Enter", "Menu", "Copy", "Paste", "Insert", "Delete",
+    "Play", "Stop", "Record", "Pattern", "Song", "Instrument",
+    "Value -1", "Value +1"
+};
+
+static const strItemTypeListText remoteEnabledSetup{
+    &mtConfig.remote.remoteEnabled, 2, onOffStateTexts
+};
+static const strItemTypeListText remoteProfileSetup{
+    &mtConfig.remote.remoteProfile, 4, remoteProfiles
+};
+static const strItemTypeListText remoteChannelSetup{
+    &mtConfig.remote.remoteChannel, 17, notesChannel
+};
+static const strItemTypeListText remoteSourceSetup{
+    &mtConfig.remote.remoteSource, 3, remoteSources
+};
+static const strItemTypeListText remoteActionSetup{
+    &mtConfig.remote.remoteLearnAction, kMidiRemoteActionCount, remoteActions
+};
+static const strItemTypeActionButton remoteCopySetup{
+    copyLaunchpadPresetToUserProfile, nullptr
+};
+static const strItemTypeActionButton remoteLearnSetup{ startMidiRemoteLearn, nullptr };
+static const strItemTypeActionButton remoteClearSetup{ clearMidiRemoteAssignment, nullptr };
+static const strItemTypeActionButton remoteCancelLearnSetup{ cancelMidiRemoteLearn, nullptr };
+
+cMenuItem melRemoteEnabled(menuMidiRemote,
+                           "Enabled",
+                           "Off leaves incoming notes and CCs unchanged.",
+                           menuTypeItemListText,
+                           &remoteEnabledSetup);
+cMenuItem melRemoteProfile(menuMidiRemote,
+                           "Profile",
+                           "Launchpad X is read-only; Custom 1-3 store learned bindings.",
+                           menuTypeItemListText,
+                           &remoteProfileSetup);
+cMenuItem melRemoteSource(menuMidiRemote,
+                          "Input",
+                          nullptr,
+                          menuTypeItemListText,
+                          &remoteSourceSetup);
+cMenuItem melRemoteChannel(menuMidiRemote,
+                           "Channel",
+                           "Remote input channel; All receives commands from any channel.",
+                           menuTypeItemListText,
+                           &remoteChannelSetup);
+cMenuItem melRemoteAction(menuMidiRemote,
+                          "Action to learn",
+                          "Select an action, then choose Learn next input.",
+                          menuTypeItemListText,
+                          &remoteActionSetup);
+cMenuItem melRemoteCopy(menuMidiRemote,
+                        "Copy Launchpad preset",
+                        "Copies the default bindings into the selected Custom profile.",
+                        menuTypeItemActionButton,
+                        &remoteCopySetup);
+cMenuItem melRemoteLearn(menuMidiRemote,
+                         "Learn next input",
+                         "In Custom 1-3, press a button on the controller.",
+                         menuTypeItemActionButton,
+                         &remoteLearnSetup);
+cMenuItem melRemoteClear(menuMidiRemote,
+                         "Clear assignment",
+                         "Clears the selected action in a Custom profile.",
+                         menuTypeItemActionButton,
+                         &remoteClearSetup);
+cMenuItem melRemoteCancel(menuMidiRemote,
+                          "Cancel MIDI Learn",
+                          nullptr,
+                          menuTypeItemActionButton,
+                          &remoteCancelLearnSetup);
+#endif
 
 //==================================================================================================================================================================
 // Firmware

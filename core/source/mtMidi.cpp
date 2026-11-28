@@ -1,4 +1,6 @@
 #include "mtSequencer.h"
+#include "mtMidiRemote.h"
+#include "mtConfig.h"
 
 #include "configEditor/configEditor.h"
 #include "instrumentEditor/instrumentEditor.h"
@@ -31,6 +33,189 @@ void peformanceModeOnMidiCC(uint8_t cc_idx, uint8_t cc_value);
 void changeMixerOnMidiCC(uint8_t cc_idx, uint8_t cc_value);
 
 elapsedMillis timerMidiDelay = 0;
+
+#ifdef TRACKER_MINI
+// Launchpad X Programmer Mode: top row CC 91-98, right column CC
+// 89/79/69/59/49/39/29/19. 0 means no factory binding.
+static constexpr uint8_t launchpadXCC[kMidiRemoteActionCount] = {
+    91, 92, 93, 94, 96, 95, 79, 69, 29, 39,
+    89, 49, 19, 97, 59, 98, 0, 0
+};
+static bool remoteLearning = false;
+static bool remoteMenuHeld = false;
+static uint8_t remoteLearnProfile = 0;
+static uint8_t remoteLearnAction = 0;
+
+void startMidiRemoteLearn()
+{
+    // Factory profile is immutable. Select a user slot before learning.
+    remoteLearning = mtConfig.remote.remoteProfile >= 1 &&
+                     mtConfig.remote.remoteProfile <= kMidiRemoteUserProfiles;
+    if (remoteLearning)
+    {
+        remoteLearnProfile = mtConfig.remote.remoteProfile;
+        remoteLearnAction = mtConfig.remote.remoteLearnAction;
+    }
+}
+void cancelMidiRemoteLearn()
+{
+    remoteLearning = false;
+}
+void clearMidiRemoteAssignment()
+{
+    if (mtConfig.remote.remoteProfile < 1 ||
+        mtConfig.remote.remoteProfile > kMidiRemoteUserProfiles)
+        return;
+    mtConfig.remote.remoteBindings[mtConfig.remote.remoteProfile - 1]
+                                [mtConfig.remote.remoteLearnAction] = {};
+    saveConfigAsap();
+}
+void copyLaunchpadPresetToUserProfile()
+{
+    if (mtConfig.remote.remoteProfile < 1 ||
+        mtConfig.remote.remoteProfile > kMidiRemoteUserProfiles)
+        return;
+    auto& profile = mtConfig.remote.remoteBindings[mtConfig.remote.remoteProfile - 1];
+    for (uint8_t action = 0; action < kMidiRemoteActionCount; ++action)
+    {
+        profile[action].type = launchpadXCC[action] ? remoteCC : remoteUnassigned;
+        profile[action].number = launchpadXCC[action];
+    }
+    remoteLearning = false;
+    saveConfigAsap();
+}
+
+static void dispatchMidiRemoteAction(uint8_t action, bool down)
+{
+    // The menu popup needs press/release; all other mapped commands are
+    // one-shots on the rising edge, never repeating on release.
+    if (action == remoteMenu)
+    {
+        if (remoteMenuHeld != down)
+        {
+            remoteMenuHeld = down;
+            mtInterface.buttonChange(interfaceButtonMiniMenu,
+                                     down ? buttonPress : buttonRelease);
+        }
+        return;
+    }
+    if (!down)
+        return;
+
+    if (action == remoteStop)
+    {
+        sequencer.handleMidiInStop();
+        return;
+    }
+    if (action == remotePaste)
+    {
+        if (mtInterface.isPatternScreenActive())
+            pastePatternFromMidiRemote();
+        return;
+    }
+
+    uint8_t button = interfaceButtonsCount;
+    switch (action)
+    {
+        case remoteUp: button = interfaceButtonUp; break;
+        case remoteDown: button = interfaceButtonDown; break;
+        case remoteLeft: button = interfaceButtonLeft; break;
+        case remoteRight: button = interfaceButtonRight; break;
+        case remoteSelect: button = interfaceButtonMiniMiddle; break;
+        case remoteCopy: button = interfaceButtonCopy; break;
+        case remoteInsert: button = interfaceButtonInsert; break;
+        case remoteDelete: button = interfaceButtonDelete; break;
+        case remotePlay: button = interfaceButtonPlay; break;
+        case remoteRecord: button = interfaceButtonRec; break;
+        case remotePattern: button = interfaceButtonPattern; break;
+        case remoteSong: button = interfaceButtonSong; break;
+        case remoteInstrument: button = interfaceButtonParams; break;
+        case remoteValueMinus: button = interfaceButtonMiniMinus1; break;
+        case remoteValuePlus: button = interfaceButtonMiniPlus1; break;
+        default: break;
+    }
+    if (button < interfaceButtonsCount)
+    {
+        mtInterface.buttonChange(button, buttonPress);
+        mtInterface.buttonChange(button, buttonRelease);
+    }
+}
+
+bool processMidiRemote(uint8_t source, uint8_t channel, uint8_t type,
+                       uint8_t number, uint8_t value)
+{
+    auto& config = mtConfig.remote;
+    if ((config.remoteSource != remoteBoth && config.remoteSource != source) ||
+        (config.remoteChannel != 0 && channel != config.remoteChannel))
+        return false;
+    if (remoteLearning)
+    {
+        // A profile or action change while armed must never index slot -1.
+        if (config.remoteProfile != remoteLearnProfile ||
+            config.remoteLearnAction != remoteLearnAction ||
+            remoteLearnProfile == 0 || remoteLearnProfile > kMidiRemoteUserProfiles ||
+            remoteLearnAction >= kMidiRemoteActionCount)
+        {
+            remoteLearning = false;
+        }
+        else if (value > 0 && (type == remoteCC || type == remoteNote))
+        {
+            auto& binding = config.remoteBindings[remoteLearnProfile - 1][remoteLearnAction];
+            binding.type = type;
+            binding.number = number;
+            remoteLearning = false;
+            saveConfigAsap();
+            return true;
+        }
+    }
+    if (!config.remoteEnabled)
+    {
+        // Release a held menu button if remote control is disabled mid-press.
+        if (remoteMenuHeld)
+        {
+            remoteMenuHeld = false;
+            mtInterface.buttonChange(interfaceButtonMiniMenu, buttonRelease);
+        }
+        return false;
+    }
+
+    for (uint8_t action = 0; action < kMidiRemoteActionCount; ++action)
+    {
+        uint8_t bindingType = remoteUnassigned;
+        uint8_t bindingNumber = 0;
+        if (config.remoteProfile == 0)
+        {
+            if (launchpadXCC[action] != 0)
+            {
+                bindingType = remoteCC;
+                bindingNumber = launchpadXCC[action];
+            }
+        }
+        else if (config.remoteProfile <= kMidiRemoteUserProfiles)
+        {
+            const auto& binding =
+              config.remoteBindings[config.remoteProfile - 1][action];
+            bindingType = binding.type;
+            bindingNumber = binding.number;
+        }
+        if (bindingType != remoteUnassigned && type == bindingType &&
+            number == bindingNumber)
+        {
+            dispatchMidiRemoteAction(action, value != 0);
+            return true; // prevent matched CCs/notes reaching musical handlers
+        }
+    }
+    return false;
+}
+#else
+void startMidiRemoteLearn() {}
+void cancelMidiRemoteLearn() {}
+void clearMidiRemoteAssignment() {}
+void copyLaunchpadPresetToUserProfile() {}
+bool processMidiRemote(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) { return false; }
+#endif
+
+
 
 void midiInit(UartMidi* uartMidi, UsbMidi* usbMidi)
 {
@@ -91,6 +276,8 @@ uint8_t isIncomingChannelDesired(uint8_t chan)
 
 void handleJackNoteOn(byte channel, byte pitch, byte velocity)
 {
+    if (processMidiRemote(remoteJack, channel, remoteNote, pitch, velocity))
+        return;
     //	Serial.printf("ON\tch: %d, pitch: %d, velo: %d \r\n", channel, pitch,
     //					velocity);
     //	MIDI.sendNoteOn(pitch, velocity, channel);
@@ -137,6 +324,8 @@ void handleJackNoteOn(byte channel, byte pitch, byte velocity)
 }
 void handleUsbNoteOn(byte channel, byte pitch, byte velocity)
 {
+    if (processMidiRemote(remoteUSB, channel, remoteNote, pitch, velocity))
+        return;
     //	Serial.printf("ON\tch: %d, pitch: %d, velo: %d \r\n", channel, pitch,
     //					velocity);
     //	MIDI.sendNoteOn(pitch, velocity, channel);
@@ -182,6 +371,8 @@ void handleUsbNoteOn(byte channel, byte pitch, byte velocity)
 
 void handleJackNoteOff(byte channel, byte pitch, [[maybe_unused]] byte velocity)
 {
+    if (processMidiRemote(remoteJack, channel, remoteNote, pitch, 0))
+        return;
 
     //	Serial.printf("OFF\tch: %d, pitch: %d, velo: %d\r\n", channel, pitch,
     //					velocity);
@@ -228,6 +419,8 @@ void handleJackNoteOff(byte channel, byte pitch, [[maybe_unused]] byte velocity)
 
 void handleUsbNoteOff(byte channel, byte pitch, [[maybe_unused]] byte velocity)
 {
+    if (processMidiRemote(remoteUSB, channel, remoteNote, pitch, 0))
+        return;
 
     //	Serial.printf("OFF\tch: %d, pitch: %d, velo: %d\r\n", channel, pitch,
     //					velocity);
@@ -272,6 +465,8 @@ void handleUsbNoteOff(byte channel, byte pitch, [[maybe_unused]] byte velocity)
 
 void handleJackControlChange(byte channel, byte number, byte value)
 {
+    if (processMidiRemote(remoteJack, channel, remoteCC, number, value))
+        return;
 
     if ((mtConfig.midi.ccInMode == ccIn_None) || (mtConfig.midi.ccInMode == ccIn_usb))
         return;
@@ -290,6 +485,8 @@ void handleJackControlChange(byte channel, byte number, byte value)
 
 void handleUSBControlChange(byte channel, byte number, byte value)
 {
+    if (processMidiRemote(remoteUSB, channel, remoteCC, number, value))
+        return;
     if ((mtConfig.midi.ccInMode == ccIn_None) || (mtConfig.midi.ccInMode == ccIn_jack))
         return;
 

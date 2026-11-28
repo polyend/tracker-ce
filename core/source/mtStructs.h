@@ -44,7 +44,11 @@ const uint8_t PROJECT_FILE_VERSION = 18;   // wersja struktury pliku projektu
 const uint8_t INSTRUMENT_FILE_VERSION = 9; // wersja struktury pliku instrumentu
 const uint8_t PATTERN_FILE_VERSION = 6;
 
+#ifdef TRACKER_MINI
+const uint8_t CONFIG_STRUCT_VER = 11;
+#else
 const uint8_t CONFIG_STRUCT_VER = 10;
+#endif
 
 static constexpr float DEFAULT_TEMPO = 130.0f;
 static constexpr float kMinExternalBPM = 10.0f;
@@ -1039,6 +1043,16 @@ enum NoteDisplayMode
     kNoteDisplayModeDefault = kNoteDisplayOriginal,
 };
 
+// Remote MIDI bindings are deliberately compact: 0=unassigned, 1=CC, 2=note.
+// Three user profiles are stored in the versioned MIDI configuration section.
+static constexpr uint8_t kMidiRemoteActionCount = 18;
+static constexpr uint8_t kMidiRemoteUserProfiles = 3;
+struct MidiRemoteBinding
+{
+    uint8_t type = 0;
+    uint8_t number = 0;
+};
+
 struct strMtConfig
 {
     struct strConfigHeader
@@ -1188,6 +1202,20 @@ struct strMtConfig
         uint8_t usbAudioMode = 0;
 
     } common;
+
+#ifdef TRACKER_MINI
+    // Appended after the existing sections to preserve serialized offsets.
+    struct strMidiRemoteValues
+    {
+        uint16_t size;
+        uint8_t remoteEnabled = 0;
+        uint8_t remoteProfile = 0; // 0=Launchpad X, 1-3=user profiles
+        uint8_t remoteChannel = 1;
+        uint8_t remoteSource = 0; // 0=USB, 1=TRS MIDI, 2=Either
+        uint8_t remoteLearnAction = 0;
+        MidiRemoteBinding remoteBindings[kMidiRemoteUserProfiles][kMidiRemoteActionCount] = {};
+    } remote;
+#endif
 
     // /\ dodawac nowe wartosci do podstruktur powyżej na końcach każdej ze struktur
     // \/ jesli chcemy dodawac nowe podstruktury wymagana jest edycja mtConfig.cpp
