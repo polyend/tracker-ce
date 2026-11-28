@@ -101,6 +101,15 @@ static void functDown();
 
 static void functCopyPaste();
 
+static void functRec();
+static void functMoveUp();
+static void functMoveDown();
+static void functApplyArrange();
+static void functCancelArrange();
+static void functArrangeUpdatePatterns();
+static void functArrangeSkipPatterns();
+static void functArrangeBackToEdit();
+
 static void functConfirmKey();
 
 static void functPreviewFile(uint8_t state);
@@ -187,6 +196,12 @@ void cSampleImporter::update()
 
         newFileManager.clearStatus();
     }
+    else if (managerStatus == fmMoveInstrumentsEnd)
+    {
+        newFileManager.clearStatus();
+
+        finishArrangeApply(true);
+    }
     else if (managerStatus == fmDeleteInstrumentsEnd)
     {
         newFileManager.clearStatus();
@@ -209,6 +224,11 @@ void cSampleImporter::update()
         ip->unblockAllInputs();
 
         newFileManager.clearStatus();
+
+        if (arrangeApplying)
+        {
+            finishArrangeApply(false);
+        }
     }
 
     if (refreshProgressCalc && refreshPlayProgressValue > 10)
@@ -393,6 +413,10 @@ void cSampleImporter::start(uint32_t options)
 
     ip->setButtonObj(interfaceButtonMiniMenu, functMenu);
 
+    arrangeMode = false;
+    arrangeApplying = false;
+    resetArrangeOrder();
+
     showDefaultScreen();
     setDefaultScreenFunct();
 
@@ -406,6 +430,13 @@ void cSampleImporter::start(uint32_t options)
 
 void cSampleImporter::stop()
 {
+    // queued moves are only a view of the list - leaving the screen discards them
+    if (arrangePending)
+    {
+        resetArrangeOrder();
+        listInstrumentSlots(); // the names list is shared with other screens
+    }
+    arrangeMode = false;
 
     mtPopups.hideInfoPopup();
 
@@ -463,7 +494,14 @@ void cSampleImporter::setDefaultScreenFunct()
 
     ip->setButtonObj(interfaceButtonMiniMiddle, functMiniMiddle);
 
+    ip->setButtonObj(interfaceButtonRec, buttonPress, functRec);
+
     ip->setPadsGlobal(functPads);
+
+    if (arrangeMode)
+    {
+        setArrangeScreenFunct();
+    }
 }
 
 //==============================================================================================================
@@ -543,7 +581,7 @@ static void functDelete(uint8_t state)
     {
         SI->setDefaultPreviewVolume();
     }
-    else
+    else if (!SI->arrangeMode)
     {
         if (state == buttonPress)
         {
@@ -1011,6 +1049,11 @@ static void functEncoder(int16_t value)
 
 static void functEnter()
 {
+    if (SI->arrangeMode)
+    {
+        return;
+    }
+
     switch (SI->selectedPlace)
     {
         case 0: SI->BrowseOrAdd(); break;
@@ -1129,7 +1172,7 @@ static void functAutoNameRename()
 
 static void functCopyPaste()
 {
-    if (SI->keyboardManager.getState())
+    if (SI->keyboardManager.getState() || SI->arrangeMode)
     {
         return;
     }
@@ -1267,6 +1310,11 @@ static void functLeft()
     {
         SI->keyboardManager.makeMove('a');
         return;
+    }
+
+    if (SI->arrangeMode && SI->selectedPlace == 1)
+    {
+        return; // arranging works on the instrument list only
     }
 
     SI->playFromPads(INTERFACE_BUTTON_PREVIEW, buttonRelease, -1);
@@ -1508,6 +1556,14 @@ void cSampleImporter::refreshGuiAfterDelay()
 
 void cSampleImporter::refreshActionButtons()
 {
+    if (arrangeMode)
+    {
+        arrangeColorControl();
+        previewColorControl();
+        updateMemoryButtonLabel();
+        return;
+    }
+
     showAddOrEnter(buttons->isButtonPressed(interfaceButtonShift));
 
     renameColorControl();
@@ -1616,31 +1672,27 @@ void cSampleImporter::listInstrumentSlots()
 {
     for (uint8_t i = 0; i < kSampleInstrumentsCount; i++)
     {
-        if (mtProject.instrument[i].isActive)
+        // with moves queued the row shows the sample that will land in it, marked with '*'
+        const uint8_t src = arrangeSource(i);
+        const char* moved = (src != i) ? "*" : "";
+
+        if (mtProject.instrument[src].isActive)
         {
-            if (mtProject.sampleMemory[i].isStreamed)
-            {
-                snprintf(&interfaceGlobals.intrumentsNames[i][0],
-                         sizeof(interfaceGlobals.intrumentsNames[i]),
-                         "%d.[S] %s",
-                         i + 1,
-                         mtProject.instrument[i].sample.file_name);
-            }
-            else
-            {
-                snprintf(&interfaceGlobals.intrumentsNames[i][0],
-                         sizeof(interfaceGlobals.intrumentsNames[i]),
-                         "%d.%s",
-                         i + 1,
-                         mtProject.instrument[i].sample.file_name);
-            }
+            snprintf(&interfaceGlobals.intrumentsNames[i][0],
+                     sizeof(interfaceGlobals.intrumentsNames[i]),
+                     "%d.%s%s%s",
+                     i + 1,
+                     moved,
+                     mtProject.sampleMemory[src].isStreamed ? "[S] " : "",
+                     mtProject.instrument[src].sample.file_name);
         }
         else
         {
             snprintf(&interfaceGlobals.intrumentsNames[i][0],
                      sizeof(interfaceGlobals.intrumentsNames[i]),
-                     "%d.",
-                     i + 1);
+                     "%d.%s",
+                     i + 1,
+                     moved);
         }
 
         interfaceGlobals.ptrIntrumentsNames[i] = &interfaceGlobals.intrumentsNames[i][0];
@@ -1834,7 +1886,9 @@ void cSampleImporter::playSampleFromBank(uint8_t pad, uint8_t state, int16_t vel
 {
     if (currentCopyStatusFlag || currentLoadStatusFlag)
         return;
-    if (!mtProject.instrument[selectedSlot].isActive)
+
+    const uint8_t sourceSlot = arrangeSource(selectedSlot);
+    if (!mtProject.instrument[sourceSlot].isActive)
         return;
 
     //	if(sequencer.getSeqState() != Sequencer::SEQ_STATE_STOP)
@@ -1847,7 +1901,7 @@ void cSampleImporter::playSampleFromBank(uint8_t pad, uint8_t state, int16_t vel
     //
     //	stopPlaying();
 
-    mtProject.values.lastUsedInstrument = SI->selectedSlot;
+    mtProject.values.lastUsedInstrument = sourceSlot;
     playMode = playModeSampleBank;
 
     uint8_t noteFromPad = mtPadBoard.getNoteFromPad(pad);
@@ -2314,6 +2368,11 @@ static void functMemoryModeOrToggle()
 
 void cSampleImporter::handleMemoryModeOrToggle()
 {
+    if (arrangePending)
+    {
+        return; // the shown slots are not the real ones until the moves are applied
+    }
+
     if (selectedPlace == 1 && selectedSlot < kSampleInstrumentsCount &&
         mtProject.instrument[selectedSlot].isActive)
     {
@@ -2458,6 +2517,9 @@ static void functStopPatternYes()
         case cSampleImporter::enStopPatternAction::instrAddNext: functInstrumentAddNext(); break;
         case cSampleImporter::enStopPatternAction::instrCopy: functCopyPaste(); break;
         case cSampleImporter::enStopPatternAction::instrDelete: functInstrumentDelete(); break;
+        case cSampleImporter::enStopPatternAction::instrApplyArrange:
+            SI->startArrangeApply();
+            break;
         default: break;
     }
 
@@ -2650,4 +2712,286 @@ static void functSelectPreviewVolume(uint8_t state)
             SI->activateLabelsBorder();
         }
     }
+}
+
+//==============================================================================================================
+// arrange mode
+
+static void functRec()
+{
+    if (SI->keyboardManager.getState())
+    {
+        return;
+    }
+
+    // queued moves have to be applied or cancelled before leaving arrange mode
+    if (SI->arrangePending || SI->arrangeApplying)
+    {
+        return;
+    }
+
+    SI->toggleArrangeMode();
+}
+
+static void functMoveUp()
+{
+    SI->moveSelectedInstruments(-1);
+}
+
+static void functMoveDown()
+{
+    SI->moveSelectedInstruments(1);
+}
+
+static void functApplyArrange()
+{
+    SI->applyArrange();
+}
+
+static void functCancelArrange()
+{
+    SI->cancelArrange();
+}
+
+static void functArrangeUpdatePatterns()
+{
+    SI->closeUpdatePatternsPopup();
+    SI->arrangeUpdatePatterns = true;
+    SI->startArrangeApply();
+}
+
+static void functArrangeSkipPatterns()
+{
+    SI->closeUpdatePatternsPopup();
+    SI->arrangeUpdatePatterns = false;
+    SI->startArrangeApply();
+}
+
+static void functArrangeBackToEdit()
+{
+    // the queued moves stay - back to arranging
+    SI->closeUpdatePatternsPopup();
+}
+
+void cSampleImporter::toggleArrangeMode()
+{
+    arrangeMode = !arrangeMode;
+
+    if (arrangeMode)
+    {
+        // moving only makes sense on the instrument list
+        if (selectedPlace != 1)
+        {
+            selectedPlace = 1;
+            cancelSelect(listFiles);
+            handleMemoryBar();
+        }
+    }
+
+    setDefaultScreenFunct();
+    showDefaultScreen();
+}
+
+void cSampleImporter::setArrangeScreenFunct()
+{
+    ip->clearButton(interfaceButton0);
+    ip->clearButton(interfaceButton1);
+    ip->clearButton(interfaceButton3);
+    ip->clearButton(interfaceButton4);
+    ip->clearButton(interfaceButton5);
+
+    ip->setButtonObj(interfaceButton0, buttonPress, functMoveUp);
+    ip->setButtonObj(interfaceButton1, buttonPress, functMoveDown);
+    // button 2 keeps Preview, 3 is unused, 6 and 7 keep Preview Vol and Memory
+    // Cancel before Apply, like the confirmation popups
+    ip->setButtonObj(interfaceButton4, buttonPress, functCancelArrange);
+    ip->setButtonObj(interfaceButton5, buttonPress, functApplyArrange);
+}
+
+void cSampleImporter::resetArrangeOrder()
+{
+    for (uint8_t i = 0; i < kSampleInstrumentsCount; i++)
+    {
+        arrangeOrder[i] = i;
+    }
+    arrangePending = false;
+}
+
+// Queues a move: only the shown order changes, the samples stay where they are until Apply.
+void cSampleImporter::moveSelectedInstruments(int8_t direction)
+{
+    if (!arrangeMode || arrangeApplying || selectedPlace != 1 || keyboardManager.getState())
+    {
+        return;
+    }
+
+    int16_t first = getSelectionStart(listInstruments);
+    int16_t last = getSelectionEnd(listInstruments);
+
+    if (first < 0 || last >= kSampleInstrumentsCount || first > last)
+    {
+        return;
+    }
+    if ((direction < 0 && first == 0) || (direction > 0 && last >= kSampleInstrumentsCount - 1))
+    {
+        return;
+    }
+
+    // the row under the cursor is about to show another sample
+    playFromPads(INTERFACE_BUTTON_PREVIEW, buttonRelease, -1);
+    stopPlayingAll();
+
+    const uint8_t count = last - first + 1;
+    if (direction < 0)
+    {
+        // the row above the block drops to the block's last row
+        uint8_t displaced = arrangeOrder[first - 1];
+        memmove(&arrangeOrder[first - 1], &arrangeOrder[first], count);
+        arrangeOrder[last] = displaced;
+    }
+    else
+    {
+        // the row below the block rises to the block's first row
+        uint8_t displaced = arrangeOrder[last + 1];
+        memmove(&arrangeOrder[first + 1], &arrangeOrder[first], count);
+        arrangeOrder[first] = displaced;
+    }
+
+    // moving everything back to where it started leaves nothing to apply
+    arrangePending = false;
+    for (uint8_t i = 0; i < kSampleInstrumentsCount; i++)
+    {
+        if (arrangeOrder[i] != i)
+        {
+            arrangePending = true;
+            break;
+        }
+    }
+
+    // the selection and cursor follow the moved samples
+    if (selectionLength[listInstruments] > 0)
+    {
+        memset(instrumentSelectionTab, 0, sizeof(instrumentSelectionTab));
+        for (int16_t i = first + direction; i <= last + direction; i++)
+        {
+            instrumentSelectionTab[i] = 1;
+        }
+    }
+
+    selectedSlot = clamp<int>(selectedSlot + direction, 0, kSampleInstrumentsCount - 1);
+    mtProject.values.lastUsedInstrument = arrangeSource(selectedSlot);
+
+    refreshAfterArrangeChange();
+}
+
+void cSampleImporter::applyArrange()
+{
+    if (!arrangeMode || !arrangePending || arrangeApplying || keyboardManager.getState())
+    {
+        return;
+    }
+
+    playFromPads(INTERFACE_BUTTON_PREVIEW, buttonRelease, -1);
+    stopPlayingAll();
+
+    // a button refresh still waiting from a list scroll would redraw over the popup
+    delayRefreshGUI = false;
+
+    // Update / Skip / Cancel - the rest of the screen waits for the answer
+    ip->clearButtonsRange(interfaceButton0, interfaceButton7);
+    ip->setButtonObj(interfaceButton5, buttonPress, functArrangeBackToEdit);
+    ip->setButtonObj(interfaceButton6, buttonPress, functArrangeSkipPatterns);
+    ip->setButtonObj(interfaceButton7, buttonPress, functArrangeUpdatePatterns);
+    ip->blockAllInputsExceptScreenButtons();
+
+    showUpdatePatternsPopup();
+}
+
+void cSampleImporter::closeUpdatePatternsPopup()
+{
+    ip->unblockAllInputs();
+    setDefaultScreenFunct();
+    hideInfoPopup();
+}
+
+// Runs the queued moves, with arrangeUpdatePatterns already chosen in the popup.
+void cSampleImporter::startArrangeApply()
+{
+    if (!arrangeMode || !arrangePending || arrangeApplying)
+    {
+        return;
+    }
+
+    if (sequencer.getSeqState() != Sequencer::SEQ_STATE_STOP)
+    {
+        stopPatternAction = enStopPatternAction::instrApplyArrange;
+        showStopPatternPopup();
+        setStopPatternFunction();
+        return;
+    }
+
+    playFromPads(INTERFACE_BUTTON_PREVIEW, buttonRelease, -1);
+    stopPlayingAll();
+
+    if (newFileManager.reorderInstrumentsInWorkspace(arrangeOrder, arrangeUpdatePatterns))
+    {
+        arrangeApplying = true;
+        ip->blockAllInputs();
+    }
+    else
+    {
+        mtPopups.show(0, "Can't move samples now");
+    }
+}
+
+void cSampleImporter::cancelArrange()
+{
+    if (!arrangeMode || !arrangePending || arrangeApplying || keyboardManager.getState())
+    {
+        return;
+    }
+
+    playFromPads(INTERFACE_BUTTON_PREVIEW, buttonRelease, -1);
+    stopPlayingAll();
+
+    resetArrangeOrder();
+    mtProject.values.lastUsedInstrument = selectedSlot;
+
+    refreshAfterArrangeChange();
+}
+
+void cSampleImporter::finishArrangeApply(bool success)
+{
+    arrangeApplying = false;
+
+    // after a failure the samples may be partly reordered - show what is really there
+    resetArrangeOrder();
+
+    // a pending copy points at slot numbers that now hold other samples
+    resetInstrSel();
+
+    mtProject.values.lastUsedInstrument = selectedSlot;
+
+    refreshAfterArrangeChange();
+
+    ip->unblockAllInputs();
+
+    if (!success)
+    {
+        mtPopups.show(0, "Moving samples failed");
+    }
+}
+
+void cSampleImporter::refreshAfterArrangeChange()
+{
+    listInstrumentSlots();
+    refreshInstrumentsList();
+    updateSelection();
+    handleMemoryBar();
+
+    if (arrangeMode)
+    {
+        showArrangeLabels();
+    }
+    refreshActionButtons();
 }

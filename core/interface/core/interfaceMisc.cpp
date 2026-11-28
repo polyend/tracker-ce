@@ -360,6 +360,7 @@ void Interface::commonThingsUpdate()
                 case fmImportingMod: text_index = 21; break;
                 case fmExportingMod: text_index = 22; break;
                 case fmReloadingSamples: text_index = 23; break;
+                case fmMovingInstruments: text_index = 25; break;
                 default: text_index = 0; break;
             }
 
@@ -412,6 +413,7 @@ void Interface::processFileManagerPopupProgress(uint8_t status)
         case fmImportingSamplesToWorkspace: progress = newFileManager.getProgress(); break;
         case fmCopyingInstrumentsInWorkspace: break;
         case fmDeleteingInstruments: break;
+        case fmMovingInstruments: progress = newFileManager.getProgress(); break;
         case fmPreviewSampleFromSd: break;
         case fmLoadingProjectfromWorkspace: break;
         case fmLoadingProjectFromProjects: progress = newFileManager.getProgress(); break;

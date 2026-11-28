@@ -251,6 +251,8 @@ const char fileManagerPopupText[][30] = {
     "Loading Samples",
 
     "Exporting Samples",
+
+    "Moving samples",
 };
 //-------------------------------------------------------------
 

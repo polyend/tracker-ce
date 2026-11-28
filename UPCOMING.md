@@ -94,6 +94,11 @@
 	* Added options in **`Config → General → File Manager`:** `Confirm all`, `Confirm delete`, `Never ask`. System folders are actively protected.
 	* Integrated the **File Viewer** directly into File Manager (**Button `View`** / **Enter**): opens any `.jpg`/`.jpeg` (`800 × 390` px) or text file (`.txt`, `.md`, `.json`, `.ini`, `.cfg`, `.log`, up to `128 KB` / `8,192` lines with `Up/Down/Jog` & `PgUp/PgDn`) from any folder, with sibling navigation (`Left/Right` / `<<` / `>>`). See [`docs/info_viewer.md`](docs/info_viewer.md).
 
+20. **Reorder Samples in Sample Loader (All 3 Devices)**
+	* Pressing **`[Rec]`** on the Sample Loader screen toggles an **Arrange** set of actions: **`Move up`** and **`Move down`** move the highlighted instrument (or `[Shift]`-selected block of instruments) one slot up or down the list. The sample in the target slot swaps into the slot that was freed.
+	* Moves are queued: the list shows the new order straight away (moved slots are marked with `*`) and nothing is changed until you press **`Apply`**, which performs all of them in one operation. **`Cancel`** discards the queued moves. Leaving the Sample Loader also discards them.
+	* **`Apply`** asks whether to update patterns: **`Update`** rewrites every pattern step, including undo history, so it keeps playing the same sample after the move. **`Skip`** keeps the slot numbers in patterns, so they play whatever sample now occupies those slots. **`Cancel`** returns to arranging with the queued moves intact.
+
 ### Changed & Fixed
 
 * **Unified `/System/` SD Card Layout & Hidden `/.system/` Support (All 3 Devices)**:
