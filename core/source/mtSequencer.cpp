@@ -3067,6 +3067,11 @@ AUDIO_CORE_FLASH void Sequencer::handleNoteOn(
                 ((isEditMode() && !player.track[trackIdx].recOpen) ||
                  !player.track[trackIdx].noteOpen))
             {
+                if (player.track[trackIdx].noteOpen && !player.track[trackIdx].recOpen)
+                {
+                    stopOpenNoteOnTrack(trackIdx);
+                }
+
                 player.track[trackIdx].noteOpen = 1;
                 player.track[trackIdx].noteLength = -1;
                 player.track[trackIdx].recOpen = true;
