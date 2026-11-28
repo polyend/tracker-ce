@@ -697,8 +697,8 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
                     bool isMidi = isMidiInstrument(instrument);
                     if (isMidi || isSynth)
                     {
-                        const int minPitchbend = isSynth ? kMidiPitchbendMin : -4000;
-                        const int maxPitchbend = isSynth ? kMidiPitchbendMax : 4000;
+                        const int minPitchbend = isSynth ? kMidiPitchbendMin / 2 : -4000;
+                        const int maxPitchbend = isSynth ? kMidiPitchbendMax / 2 : 4000;
 
                         atLeastOneFx = 1;
                         killFxOnSlot(row, fxIndex);
