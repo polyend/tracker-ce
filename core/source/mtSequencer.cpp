@@ -807,6 +807,34 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
 
                     case fx.FX_TYPE_ARP: playerRow.arp.reset(); break;
 
+                    case fx.FX_TYPE_MICROTUNING:
+                    {
+                        killFxOnSlot(row, fxIndex);
+
+                        int instrument = stepSent.instrument;
+                        bool isSynth = isSynthInstrument(instrument);
+                        bool isMidi = isMidiInstrument(instrument);
+
+                        if (isMidi || isSynth)
+                        {
+                            const int minPitchbend = isSynth ? kMidiPitchbendMin : -4000;
+                            const int maxPitchbend = isSynth ? kMidiPitchbendMax : 4000;
+
+                            sendPitchbend(mapClamped<int>((int16_t)_fx.value,
+                                                          getFxMin(fx.FX_TYPE_MICROTUNING),
+                                                          getFxMax(fx.FX_TYPE_MICROTUNING),
+                                                          minPitchbend,
+                                                          maxPitchbend),
+                                          instrumentIdxToMidiChannel(instrument),
+                                          isSynth);
+                        }
+                        else if (isSampleTrack(row))
+                        {
+                            instrumentPlayer[row].seqFx(_fx.type, _fx.value, fxIndex);
+                        }
+                        break;
+                    }
+
                     default: killFxOnSlot(row, fxIndex);
 #ifdef FEATURE_SYNTH
                         if (isSynthInstrument(stepSent.instrument) && engine.isSynthFx(_fx.type))
@@ -2699,6 +2727,12 @@ AUDIO_CORE_RAM void Sequencer::sendNoteOn(uint8_t track,
 
     if (toMidi || toSynth)
     {
+        if (step->fx[0].type != fx.FX_TYPE_MICROTUNING &&
+            step->fx[1].type != fx.FX_TYPE_MICROTUNING)
+        {
+            sendPitchbend(0, instrumentIdxToMidiChannel(step->instrument), toSynth);
+        }
+
         if ((step->fx[0].type == fx.FX_TYPE_MIDI_CHORD && step->fx[1].type != fx.FX_TYPE_ARP) ||
             (step->fx[1].type == fx.FX_TYPE_MIDI_CHORD && step->fx[0].type != fx.FX_TYPE_ARP))
         {
@@ -2871,6 +2905,7 @@ AUDIO_CORE_FLASH void Sequencer::handleNoteOn(
 
         if (isMidiInstrument(step->instrument) || isSynth)
         {
+            sendPitchbend(0, instrumentIdxToMidiChannel(step->instrument), isSynth);
             sendMidiNoteOn(
               step->note, velocity, instrumentIdxToMidiChannel(step->instrument), isSynth);
         }
@@ -3026,6 +3061,7 @@ AUDIO_CORE_FLASH void Sequencer::handleNoteOn(
 
                     if (isMidiInstrument(inst) || isSynth)
                     {
+                        sendPitchbend(0, instrumentIdxToMidiChannel(inst), isSynth);
                         sendMidiNoteOn(note,
                                        velocity,
                                        instrumentIdxToMidiChannel(inst),
@@ -3081,6 +3117,7 @@ AUDIO_CORE_FLASH void Sequencer::handleNoteOn(
 
                 if (isMidi || isSynth)
                 {
+                    sendPitchbend(0, instrumentIdxToMidiChannel(instrument), isSynth);
                     sendMidiNoteOn(note, velocity, instrumentIdxToMidiChannel(instrument), isSynth);
                 }
                 else if (isSampleTrack(trackIdx))

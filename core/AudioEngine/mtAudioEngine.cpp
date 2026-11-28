@@ -755,10 +755,17 @@ AUDIO_CORE_RAM void audioEngine::endAllFx(bool synthOnly)
             instrumentPlayer[i].endFx(instrumentPlayer[i].lastSeqFx[0], 0);
             instrumentPlayer[i].endFx(instrumentPlayer[i].lastSeqFx[1], 1);
         }
+
+        for (int channel = 0; channel < kMidiInstrumentsCount; channel++)
+        {
+            sendPitchbend(0, (int8_t)(channel + 1), false);
+        }
     }
 #ifdef FEATURE_SYNTH
     for (int synthIdx = 0; synthIdx < kSynthParts; synthIdx++)
     {
+        sendPitchbend(0, (int8_t)(synthIdx + 1), true);
+
         for (auto& fxIdAndSynthParam : fxIdToSynthParam)
         {
             endSynthFx(fxIdAndSynthParam.first, 0, synthIdx);
