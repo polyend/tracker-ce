@@ -175,6 +175,7 @@ void audioEngine::init(Platform* platform, [[maybe_unused]] Synth* synth)
     codec = platform->getCodecAudio();
     radio = platform->getRadio();
     usb = platform->getUsb();
+    usbAudio = platform->getUsbAudio();
 
 #ifdef PLATFORM_IMX
     AudioMemory(80);
@@ -798,7 +799,7 @@ void audioEngine::refreshOutputSourceOutsideTheRecorder()
     bool isUsbOutputAndInput = mtConfig.common.usbAudioMode == 3;
 
     // to handle  usb feedback loop
-    if (isUsbOutputAndInput && usb->isAttached())
+    if (isUsbOutputAndInput && usb->isAttached() && usbAudio != nullptr && usbAudio->isInputActive())
     {
         setOutputSource(audioEngine::OutputSourceType::kUsbInput);
     }

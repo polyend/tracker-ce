@@ -196,6 +196,13 @@ bool isUsbAudioOutputActive(void)
            g_deviceAudioComposite->audioUnified.attach != 0;
 }
 
+bool isUsbAudioInputActive(void)
+{
+    return g_deviceAudioComposite != NULL && g_deviceAudioComposite->attach != 0 &&
+           g_deviceAudioComposite->audioUnified.attach != 0 &&
+           g_deviceAudioComposite->audioUnified.startPlayFlag != 0;
+}
+
 void beginUsbAudioFill()
 {
     USB_DeviceIsrDisable();
@@ -506,6 +513,10 @@ void USB_DeviceAudioPlayerStatusReset()
     audioPlayReadOffset = 0;
     audioPlayBuffer.rdidx = 0;
     audioPlayBuffer.wridx = 0;
+    if (g_deviceAudioComposite != NULL)
+    {
+        g_deviceAudioComposite->audioUnified.startPlayFlag = 0;
+    }
 }
 /*!
  * @brief Audio set configuration function.
@@ -520,6 +531,7 @@ void USB_DeviceAudioPlayerStatusReset()
 usb_status_t USB_DeviceAudioCompositeSetConfigure(class_handle_t handle, uint8_t configure)
 {
     USB_DeviceAudioRecorderStatusReset();
+    USB_DeviceAudioPlayerStatusReset();
     if (USB_COMPOSITE_CONFIGURE_INDEX == configure)
     {
         g_deviceAudioComposite->audioUnified.attach = 1U;

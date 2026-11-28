@@ -181,6 +181,7 @@ class Interface
     uint8_t fileManagerPopupState = 0;
     int8_t fileManagerLastProgress;
     uint8_t noProgressChangeCounter = 0;
+    bool lastUsbAudioInputActive = false;
     Platform* platform;
     FileSystem* fileSystem;
 

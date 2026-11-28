@@ -87,5 +87,5 @@ bool UsbImpl::getClassState(Usb::ClassType type)
 
 bool UsbImpl::isAttached()
 {
-    return usb_configuration != 0;
+    return usb_configuration != 0 && !usb_suspended;
 }

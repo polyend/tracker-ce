@@ -36,3 +36,8 @@ bool UsbAudioImpl::isOutputActive() const
 {
     return usb_audio_is_tx_active() != 0;
 }
+
+bool UsbAudioImpl::isInputActive() const
+{
+    return usb_audio_is_rx_active() != 0;
+}

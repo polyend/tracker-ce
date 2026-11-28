@@ -53,12 +53,12 @@ void usb_audio_reset_buffers(void)
 
 uint8_t usb_audio_is_tx_active(void)
 {
-	return (usb_configuration && usb_audio_tx_interface != 0xFF && usb_audio_transmit_setting > 0) ? 1 : 0;
+	return (usb_configuration && !usb_suspended && usb_audio_tx_interface != 0xFF && usb_audio_transmit_setting > 0) ? 1 : 0;
 }
 
 uint8_t usb_audio_is_rx_active(void)
 {
-	return (usb_configuration && usb_audio_rx_interface != 0xFF && usb_audio_receive_setting > 0) ? 1 : 0;
+	return (usb_configuration && !usb_suspended && usb_audio_rx_interface != 0xFF && usb_audio_receive_setting > 0) ? 1 : 0;
 }
 
 // Called from USBOTG ISR (priority 7) when an isochronous OUT packet arrives

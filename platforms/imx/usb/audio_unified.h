@@ -153,6 +153,9 @@ extern "C"
     void finishUsbAudioFill();
     void fillUsbAudioChannelData(void* data, int count, int channel);
     bool isUsbAudioOutputActive();
+    bool isUsbAudioInputActive();
+    void USB_DeviceAudioRecorderStatusReset();
+    void USB_DeviceAudioPlayerStatusReset();
 #ifdef __cplusplus
 }
 #endif
