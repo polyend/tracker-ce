@@ -14,6 +14,43 @@ static inline bool isNavButton(uint8_t b)
     return b == interfaceButtonMiniMiddle || b == interfaceButtonUp || b == interfaceButtonDown ||
            b == interfaceButtonLeft || b == interfaceButtonRight;
 }
+
+// Screen-key remapping used by every on-screen text keyboard.
+// 2 = Backspace, 3 = Caps Lock, Shift = Caps Lock, 4 = Space.
+static void processTextKeyboardScreenKeys(uint8_t n, uint8_t state)
+{
+    if (!ModuleBase::keyboardManager.getState())
+    {
+        return;
+    }
+
+    if (n == interfaceButton2)
+    {
+        if (state == buttonPress || state == buttonHold)
+        {
+            ModuleBase::keyboardManager.makeBackspace();
+        }
+        return;
+    }
+
+    if (n == interfaceButton3 || n == interfaceButtonShift)
+    {
+        if (state == buttonPress)
+        {
+            ModuleBase::keyboardManager.onPadChange(CAPS_LOCK_PAD_1, buttonPress);
+        }
+        return;
+    }
+
+    if (n == interfaceButton4)
+    {
+        if (state == buttonPress || state == buttonHold)
+        {
+            ModuleBase::keyboardManager.onPadChange(SPACE_PAD_1, buttonPress);
+        }
+        return;
+    }
+}
 #endif
 
 //=======================================================================
@@ -26,6 +63,15 @@ void Interface::potChange(uint8_t n, int16_t value)
 void Interface::buttonChange(uint8_t n, uint8_t value)
 {
 #ifdef TRACKER_MINI
+    processTextKeyboardScreenKeys(n, value);
+
+    if (ModuleBase::keyboardManager.getState() &&
+        (n == interfaceButton2 || n == interfaceButton3 || n == interfaceButton4 ||
+         n == interfaceButtonShift))
+    {
+        return;
+    }
+
     if (isNavButton(n))
     {
         // If another nav button is locked, ignore this event until it releases.
