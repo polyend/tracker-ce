@@ -1,5 +1,6 @@
 #include "mtStructs.h"
 #include "patternEditor/patternEditor.h"
+#include "instrumentEditor/instrumentEditor.h"
 #include <algorithm>
 #include <assert.h>
 #include <limits.h>
@@ -4296,6 +4297,11 @@ void cPatternEditor::lightUpPadBoard()
                   mtProject.instrument[mtProject.values.lastUsedInstrument].playMode ==
                     playModeBeatSlice;
 
+#if defined(FEATURE_SYNTH) && !defined(TRACKER_MINI)
+                const bool isDrumSynth =
+                  isDrumSynthInstrument(mtProject.values.lastUsedInstrument);
+#endif
+
                 if (isBeatSlice)
                 {
                     for (uint8_t pad = 0;
@@ -4306,6 +4312,20 @@ void cPatternEditor::lightUpPadBoard()
                         padsBacklight.setBackLayer(1, mtConfig.values.padsLightBack, pad);
                     }
                 }
+#if defined(FEATURE_SYNTH) && !defined(TRACKER_MINI)
+                else if (isDrumSynth)
+                {
+                    for (uint8_t pad = 0; pad < 48; pad++)
+                    {
+                        padsBacklight.setBackLayer(
+                          instrumentEditor.isSynthPercSectionBegin(mtPadBoard.getNoteFromPad(pad))
+                            ? 1
+                            : 0,
+                          mtConfig.values.padsLightBack,
+                          pad);
+                    }
+                }
+#endif
 
                 if (show_note < 0)
                     break;
@@ -4316,6 +4336,25 @@ void cPatternEditor::lightUpPadBoard()
                                                 mtConfig.values.padsLightFront,
                                                 padToBeatNoteConverter.getPadForNote(show_note));
                 }
+#if defined(FEATURE_SYNTH) && !defined(TRACKER_MINI)
+                else if (isDrumSynth)
+                {
+                    if (mtPadBoard.countPadsWithNote(show_note,
+                                                     padsTempData,
+                                                     !(editMode > 0 || sequencer.isRec())))
+                    {
+                        for (uint8_t i = 0; i < 48; i++)
+                        {
+                            if (padsTempData[i])
+                            {
+                                padsBacklight.setFrontLayer(1,
+                                                            mtConfig.values.padsLightFront,
+                                                            i);
+                            }
+                        }
+                    }
+                }
+#endif
                 else
                 {
                     if (mtPadBoard.countPadsWithNote(show_note, padsTempData))
@@ -4452,7 +4491,7 @@ void cPatternEditor::lightUpPadBoard()
             {
                 case EditNote:
 
-                    if (mtPadBoard.countPadsWithNote(show_note, padsTempData))
+                    if (mtPadBoard.countPadsWithNote(show_note, padsTempData, true))
                     {
                         for (uint8_t i = 0; i < 48; i++)
                         {
@@ -4950,7 +4989,10 @@ void cPatternEditor::showNotePopup()
         ->track[PTE->trackerPattern.actualTrack]
         .step[PTE->trackerPattern.actualStep]
         .note;
-    if (noteIdxSelect >= 0 && mtPadBoard.countPadsWithNote(noteIdxSelect, PTE->padsTempData))
+    if (noteIdxSelect >= 0 &&
+        mtPadBoard.countPadsWithNote(noteIdxSelect,
+                                     PTE->padsTempData,
+                                     !(PTE->editMode > 0 || sequencer.isRec())))
     {
         for (uint8_t i = 0; i < 48; i++)
         {

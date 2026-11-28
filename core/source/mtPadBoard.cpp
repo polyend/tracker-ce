@@ -13,9 +13,9 @@ const uint8_t padBoard[48] = {
 
 uint8_t cMtPadBoard::convertPadToNote(uint8_t pad)
 {
-    if (pad > 48)
-        pad = 48;
-    return padNotes[padBoard[pad]];
+    if (pad > 47)
+        pad = 47;
+    return getNoteFromPad(pad);
 }
 
 void cMtPadBoard::configureInstrumentPlayer(uint8_t maxVoices)
@@ -144,28 +144,17 @@ void cMtPadBoard::setPadNotes(uint8_t scale, uint8_t noteOffset, uint8_t rootNot
             noteOffset = MAX_NOTE_OFFSET;
         // noteOffset = constrain(noteOffset, MIN_NOTE_OFFSET, MAX_NOTE_OFFSET);
 
-        uint16_t tempNote = rootNote; // nuta do podstawiania
+        uint16_t tempNote = rootNote;
         for (int8_t a = 0; a < 48; a++)
         {
             if ((a > 11) && (a % 12 == 0))
             {
-                if (noteOffset < 12)
-                    tempNote = padNotes[a - (12 - noteOffset)]; // delta wiersza
-                else if (noteOffset == 12)
-                    tempNote = padNotes[a - 1] + 1; // delta wiersza
-                else if (noteOffset == MAX_NOTE_OFFSET)
-                {
-                    // if(a == 48)	tempNote = padNotes[a - (8 - 4)]; // delta 4
-                    // else
-                    tempNote = padNotes[a - (12 - 5)]; // delta 5
-                }
+                tempNote = rootNote + (a / 12) * noteOffset;
             }
 
-            // czy jest w skali
             while (!isInScale(tempNote, rootNote, scale))
             {
                 tempNote++;
-                // Serial.println("tempnote++");
             }
             padNotes[a] = clamp<int>(tempNote, MIN_NOTE, MAX_NOTE);
             if (tempNote < MAX_NOTE)
@@ -177,13 +166,32 @@ void cMtPadBoard::setPadNotes(uint8_t scale, uint8_t noteOffset, uint8_t rootNot
     }
 }
 
-uint8_t cMtPadBoard::countPadsWithNote(int8_t note, uint8_t* pads)
+uint8_t cMtPadBoard::countPadsWithNote(int8_t note, uint8_t* pads,
+                                       [[maybe_unused]] bool drumScaleAware)
 {
     uint8_t count = 0;
+#ifdef FEATURE_SYNTH
+    const bool useScaleDrum = drumScaleAware &&
+                              isDrumSynthInstrument(mtProject.values.lastUsedInstrument);
+#endif
 
     for (uint8_t i = 0; i < 48; i++)
     {
-        if (padNotes[padBoard[i]] == note)
+        uint8_t padNote;
+#ifdef FEATURE_SYNTH
+        if (useScaleDrum)
+        {
+            padNote = padNotes[padBoard[i]];
+        }
+        else
+        {
+            padNote = getNoteFromPad(i);
+        }
+#else
+        padNote = getNoteFromPad(i);
+#endif
+
+        if (padNote == note)
         {
             pads[i] = 1;
             count++;
@@ -197,14 +205,78 @@ uint8_t cMtPadBoard::countPadsWithNote(int8_t note, uint8_t* pads)
 
 uint8_t cMtPadBoard::getNoteFromPad(int8_t pad, [[maybe_unused]] bool isBeatSlice)
 {
-#ifdef TRACKER_MINI
-#else
+#ifndef TRACKER_MINI
     if (isBeatSlice)
     {
         return padToBeatNoteConverter.getNoteFromPad(pad);
     }
 #endif
+
+#ifdef FEATURE_SYNTH
+    if (pad != INTERFACE_BUTTON_PREVIEW &&
+        isDrumSynthInstrument(mtProject.values.lastUsedInstrument))
+    {
+        if (pad < 0)
+            pad = 0;
+        if (pad > 47)
+            pad = 47;
+        return FIRST_DRUM_SYNTH_NOTE + padBoard[pad];
+    }
+#endif
+
     if (pad == INTERFACE_BUTTON_PREVIEW)
         return 60;
     return padNotes[padBoard[pad]];
+}
+
+static uint8_t noteAtScaleDegree(uint8_t scale, uint8_t rootNote, uint8_t degree)
+{
+    uint8_t note = rootNote;
+
+    for (uint8_t i = 0; i < degree; i++)
+    {
+        while (!isInScale(note, rootNote, scale))
+        {
+            note++;
+        }
+        note++;
+    }
+
+    while (!isInScale(note, rootNote, scale))
+    {
+        note++;
+    }
+
+    if (note > MAX_NOTE)
+        note = MAX_NOTE;
+
+    return note;
+}
+
+uint8_t cMtPadBoard::getSynthEditNoteFromPad(int8_t pad)
+{
+    if (pad < 0)
+        pad = 0;
+    if (pad > 47)
+        pad = 47;
+
+    int col = pad % 12 - 4;
+    if (col < 0)
+        col = 0;
+
+#ifdef FEATURE_SYNTH
+    if (isDrumSynthInstrument(mtProject.values.lastUsedInstrument))
+    {
+        static const uint8_t drumSmallPadBoard[32] = {
+            64, 65, 66, 67, 68, 69, 70, 71, 56, 57, 58, 59, 60, 61, 62, 63,
+            48, 49, 50, 51, 52, 53, 54, 55, 40, 41, 42, 43, 44, 45, 46, 47,
+        };
+        return drumSmallPadBoard[(pad / 12) * 8 + col];
+    }
+#endif
+
+    int degree = (3 - pad / 12) * 8 + col;
+    return noteAtScaleDegree(mtProject.values.padBoardScale,
+                             mtProject.values.padBoardRootNote + 12,
+                             degree);
 }

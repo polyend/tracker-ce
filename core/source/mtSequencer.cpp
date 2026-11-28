@@ -3,6 +3,7 @@
 
 #ifdef FEATURE_SYNTH
 #include "Synth.h"
+#include "TrackerImpl.h"
 #endif
 #include "fileManager.h"
 #include "log.h"
@@ -4113,3 +4114,22 @@ int instrumentIdxToSynthIdx(int instrumentIdx)
     assert(isSynthInstrument(instrumentIdx));
     return instrumentIdxToMidiChannel(instrumentIdx) - 1;
 }
+
+#ifdef FEATURE_SYNTH
+bool isDrumSynthInstrument(int instrument)
+{
+    if (!isSynthInstrument(instrument))
+    {
+        return false;
+    }
+
+    const auto& synthTypes = TrackerImpl::getInstance()->getSynth().getSynthTypes();
+    const int synthType = std::clamp<int>(
+      mtProject.values.synthPart[instrumentIdxToSynthIdx(instrument)].synthType,
+      0,
+      std::max<int>(0, static_cast<int>(synthTypes.size()) - 1));
+
+    return !synthTypes.empty() &&
+           synthTypes.at(synthType) == polysynth::InstrumentTypeId::kDrumSynth;
+}
+#endif

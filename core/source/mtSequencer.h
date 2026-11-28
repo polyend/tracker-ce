@@ -17,6 +17,9 @@ bool isMidiInstrument(int instrument);
 bool isSynthInstrument(int instrument);
 int instrumentIdxToMidiChannel(int instrument);
 int instrumentIdxToSynthIdx(int instrumentIdx);
+#ifdef FEATURE_SYNTH
+bool isDrumSynthInstrument(int instrument);
+#endif
 bool isSampleTrack(int track);
 bool isPerformanceTrack(int track);
 
