@@ -208,6 +208,7 @@ class audioEngine
     Sgtl5000* codec;
     Radio* radio;
     Usb* usb;
+    UsbAudio* usbAudio;
 
     uint8_t forceDelaySend;
     uint8_t forceReverbSend;

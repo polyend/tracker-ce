@@ -60,6 +60,7 @@ void usb_tx(uint32_t endpoint, usb_packet_t *packet);
 void usb_tx_isochronous(uint32_t endpoint, void *data, uint32_t len);
 
 extern volatile uint8_t usb_configuration;
+extern volatile uint8_t usb_suspended;
 
 extern uint16_t usb_rx_byte_count_data[NUM_ENDPOINTS];
 static inline uint32_t usb_rx_byte_count(uint32_t endpoint) __attribute__((always_inline));

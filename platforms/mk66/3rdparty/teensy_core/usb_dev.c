@@ -145,6 +145,7 @@ static uint8_t ep0_tx_data_toggle = 0;
 uint8_t usb_rx_memory_needed = 0;
 
 volatile uint8_t usb_configuration = 0;
+volatile uint8_t usb_suspended = 0;
 volatile uint8_t usb_reboot_timer = 0;
 
 
@@ -189,6 +190,7 @@ static void usb_setup(void)
 	  case 0x0900: // SET_CONFIGURATION
 		//serial_print("configure\n");
 		usb_configuration = setup.wValue;
+		usb_suspended = 0;
 		reg = &USB0_ENDPT1;
 #ifdef USB_DYNAMIC_CONFIG
 		cfg = usb_active_endpoint_config_table;
@@ -927,6 +929,7 @@ void usb_isr(void)
 	status = USB0_ISTAT;
 
 	if ((status & USB_ISTAT_SOFTOK /* 04 */ )) {
+		usb_suspended = 0;
 		if (usb_configuration) {
 			t = usb_reboot_timer;
 			if (t) {
@@ -1123,6 +1126,7 @@ void usb_isr(void)
 		// set the address to zero during enumeration
 		USB0_ADDR = 0;
 		usb_configuration = 0;
+		usb_suspended = 0;
 #ifdef AUDIO_INTERFACE
 		usb_audio_transmit_setting = 0;
 		usb_audio_receive_setting = 0;
@@ -1159,6 +1163,7 @@ void usb_isr(void)
 
 	if ((status & USB_ISTAT_SLEEP /* 10 */ )) {
 		//serial_print("sleep\n");
+		usb_suspended = 1;
 		USB0_ISTAT = USB_ISTAT_SLEEP;
 	}
 
@@ -1246,6 +1251,7 @@ void usb_reinit(uint8_t flags)
 		*((volatile uint8_t *)&USB0_ENDPT1 + i * 4) = 0;
 	}
 	usb_configuration = 0;
+	usb_suspended = 0;
 	usb_rx_memory_needed = 0;
 #ifdef AUDIO_INTERFACE
 	usb_audio_transmit_setting = 0;

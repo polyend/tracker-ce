@@ -200,6 +200,13 @@ void USB_DeviceTaskFn(void* deviceHandle)
 void USB_DeviceReset()
 {
     USB_DeviceStop(g_composite.deviceHandle);
+    g_composite.attach = 0;
+    g_composite.currentConfiguration = 0U;
+    g_composite.mscDisk.stop = 0U;
+    g_composite.audioUnified.attach = 0U;
+    g_composite.cdcVcom.attach = 0U;
+    USB_DeviceAudioRecorderStatusReset();
+    USB_DeviceAudioPlayerStatusReset();
     SDK_DelayAtLeastUs(5000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
     USB_DeviceRun(g_composite.deviceHandle);
 }
@@ -228,6 +235,10 @@ usb_status_t USB_DeviceCallback(usb_device_handle handle, uint32_t event, void* 
             g_composite.attach = 0;
             g_composite.currentConfiguration = 0U;
             g_composite.mscDisk.stop = 0U;
+            g_composite.audioUnified.attach = 0U;
+            g_composite.cdcVcom.attach = 0U;
+            USB_DeviceAudioRecorderStatusReset();
+            USB_DeviceAudioPlayerStatusReset();
             error = kStatus_USB_Success;
 #if (defined(USB_DEVICE_CONFIG_EHCI) && (USB_DEVICE_CONFIG_EHCI > 0U)) ||                          \
   (defined(USB_DEVICE_CONFIG_LPCIP3511HS) && (USB_DEVICE_CONFIG_LPCIP3511HS > 0U))
@@ -240,11 +251,29 @@ usb_status_t USB_DeviceCallback(usb_device_handle handle, uint32_t event, void* 
 #endif
         }
         break;
+#if (defined(USB_DEVICE_CONFIG_DETACH_ENABLE) && (USB_DEVICE_CONFIG_DETACH_ENABLE > 0U))
+        case kUSB_DeviceEventDetach:
+        {
+            g_composite.attach = 0;
+            g_composite.currentConfiguration = 0U;
+            g_composite.mscDisk.stop = 0U;
+            g_composite.audioUnified.attach = 0U;
+            g_composite.cdcVcom.attach = 0U;
+            USB_DeviceAudioRecorderStatusReset();
+            USB_DeviceAudioPlayerStatusReset();
+            error = kStatus_USB_Success;
+        }
+        break;
+#endif
         case kUSB_DeviceEventSetConfiguration:
             if (0U == (*temp8))
             {
                 g_composite.attach = 0;
                 g_composite.currentConfiguration = 0U;
+                g_composite.audioUnified.attach = 0U;
+                g_composite.cdcVcom.attach = 0U;
+                USB_DeviceAudioRecorderStatusReset();
+                USB_DeviceAudioPlayerStatusReset();
                 error = kStatus_USB_Success;
             }
             else if (USB_COMPOSITE_CONFIGURE_INDEX == (*temp8))

@@ -20,3 +20,8 @@ bool UsbAudioImpl::isOutputActive() const
 {
     return isUsbAudioOutputActive();
 }
+
+bool UsbAudioImpl::isInputActive() const
+{
+    return isUsbAudioInputActive();
+}

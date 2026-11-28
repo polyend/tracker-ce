@@ -116,6 +116,7 @@ class UsbAudio
     virtual void fillChannelData(void* samples, int count, int channel) = 0;
     virtual void finishFillData() = 0;
     virtual bool isOutputActive() const { return false; }
+    virtual bool isInputActive() const { return false; }
 };
 
 class UsbMidi : public Midi

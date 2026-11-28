@@ -135,6 +135,22 @@ void Interface::update()
 {
     processOperatingMode();
 
+    if (platform != nullptr)
+    {
+        Usb* usb = platform->getUsb();
+        UsbAudio* usbAudio = platform->getUsbAudio();
+        const bool usbAudioInputActive =
+          usb != nullptr && usb->isAttached() && usbAudio != nullptr && usbAudio->isInputActive();
+        if (usbAudioInputActive != lastUsbAudioInputActive)
+        {
+            lastUsbAudioInputActive = usbAudioInputActive;
+            if (!isOnScreenModule(&sampleRecorder))
+            {
+                engine.refreshOutputSourceOutsideTheRecorder();
+            }
+        }
+    }
+
     if (onScreenModule != nullptr && onScreenModule->moduleRefresh)
         onScreenModule->update();
 

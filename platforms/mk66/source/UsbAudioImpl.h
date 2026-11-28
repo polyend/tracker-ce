@@ -11,6 +11,7 @@ class UsbAudioImpl : public UsbAudio
     virtual void fillChannelData(void* samples, int count, int channel) override;
     virtual void finishFillData() override;
     virtual bool isOutputActive() const override;
+    virtual bool isInputActive() const override;
 
   private:
     static constexpr int kMaxSamplesPerBlock = 128;
