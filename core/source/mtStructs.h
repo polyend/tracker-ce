@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "mtEnvelopeGenerator.h"
+#include "util_math.h"
 #include <stdint.h>
 
 //=====================================================================
@@ -174,6 +175,39 @@ const uint8_t GLIDE_MIN = 0;
 const uint16_t GLIDE_MAX = 15000;
 const uint8_t SEND_MIN = 0;
 const uint8_t SEND_MAX = 100;
+
+inline uint16_t glideFxValueToMs(uint8_t fxVal, uint8_t maxFx = 100)
+{
+    const uint8_t half = maxFx / 2;
+    if (half == 0)
+    {
+        return 0;
+    }
+    return fxVal > half ? mapClamped<int>(fxVal, half, maxFx, 1000, GLIDE_MAX)
+                        : mapClamped<int>(fxVal, 0, half, GLIDE_MIN, 1000);
+}
+
+const uint8_t MIDI_GLIDE_MODE_OFF = 0;
+const uint8_t MIDI_GLIDE_MODE_LEGATO = 1;
+const uint8_t MIDI_GLIDE_MODE_BEND = 2;
+const uint8_t MIDI_GLIDE_MODE_BOTH = 3;
+
+const uint32_t MIDI_GLIDE_BEND_INTERVAL_US = 10000;
+const uint8_t MIDI_GLIDE_RANGE_DEFAULT_SEMITONES = 2;
+const uint8_t MIDI_GLIDE_RANGE_MAX_SEMITONES = 24;
+
+struct strMidiGlide
+{
+    int16_t bend = 0;
+    uint8_t rangeSemitones = MIDI_GLIDE_RANGE_DEFAULT_SEMITONES;
+    int8_t rampNote = -1;
+    int32_t startBend = 0;
+    int32_t remainingUs = 0;
+    int32_t totalUs = 0;
+    int32_t bendAccumUs = 0;
+    bool pending = false;
+    int8_t fromNote = -1;
+};
 
 const uint16_t ATTACK_MAX = 10000; // zastosowane jest dzielenie przez 100 bez floatow wiec wazne
                                    // zeby wartosci czasowe max env byly podzielne przez 100
@@ -1100,6 +1134,7 @@ struct strMtConfig
         uint8_t slaveClockComp;
         uint8_t programChangeInMode;
         uint8_t programChangeInChannel;
+        uint8_t glideMode;
     } midi;
 
     struct strGlobalValues

@@ -235,6 +235,13 @@ const char* const notesChannel[17] = {
     "CH9", "CH10", "CH11", "CH12", "CH13", "CH14", "CH15", "CH16",
 };
 
+const char* const midiGlideMode[4] = {
+    "Off",
+    "Legato",
+    "Bend",
+    "Both",
+};
+
 const char* const slaveClockComp[kExternalClockCompMaxVal + 1] = {
     "-6", "-5", "-4", "-3", "-2", "-1", "0", "1", "2", "3", "4", "5", "6",
 };
